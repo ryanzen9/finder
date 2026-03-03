@@ -14,14 +14,23 @@ class LibraryPage extends StatefulWidget {
 
 class _LibraryPageState extends State<LibraryPage> {
   final _searchCtrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
+
   String? _selectedTag;
   bool _loading = true;
   List<ManualItem> _all = const [];
+  double _scrollOffset = 0;
 
   @override
   void initState() {
     super.initState();
     _initLoad();
+    _scrollCtrl.addListener(() {
+      final v = _scrollCtrl.offset.clamp(0, 120).toDouble();
+      if ((v - _scrollOffset).abs() > 0.5) {
+        setState(() => _scrollOffset = v);
+      }
+    });
   }
 
   Future<void> _initLoad() async {
@@ -68,6 +77,7 @@ class _LibraryPageState extends State<LibraryPage> {
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -82,31 +92,131 @@ class _LibraryPageState extends State<LibraryPage> {
     ];
 
     final list = _filtered;
+    final progress = (_scrollOffset / 100).clamp(0.0, 1.0);
+    final logoOpacity = (1 - progress).clamp(0.0, 1.0);
+    final avatarOpacity = (1 - progress * 1.2).clamp(0.0, 1.0);
+    final searchHeight = lerpDouble(52, 46, progress) ?? 48;
 
     return Scaffold(
       body: SafeArea(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
-            : CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: Text('Finder', style: Theme.of(context).textTheme.headlineMedium),
-                    ),
+            : Stack(
+                children: [
+                  CustomScrollView(
+                    controller: _scrollCtrl,
+                    slivers: [
+                      const SliverToBoxAdapter(child: SizedBox(height: 118)),
+                      SliverToBoxAdapter(
+                        child: SizedBox(
+                          height: 52,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            children: tags.map((e) {
+                              final selected = _selectedTag == e.$1;
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: FilterChip(
+                                  label: Text(e.$2),
+                                  selected: selected,
+                                  onSelected: (v) => setState(() => _selectedTag = v ? e.$1 : null),
+                                  showCheckmark: false,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                      if (list.isEmpty)
+                        const SliverFillRemaining(child: Center(child: Text('暂无数据')))
+                      else
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                          sliver: SliverGrid(
+                            delegate: SliverChildBuilderDelegate((context, i) {
+                              final item = list[i];
+                              return Card(
+                                elevation: 0,
+                                clipBehavior: Clip.antiAlias,
+                                child: InkWell(
+                                  onTap: () => showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    showDragHandle: true,
+                                    useSafeArea: true,
+                                    builder: (_) => FractionallySizedBox(
+                                      heightFactor: 0.74,
+                                      child: _ManualDetailSheet(item: item),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        height: 90,
+                                        color: _coverColor(item.coverGradient, context),
+                                        alignment: Alignment.bottomLeft,
+                                        padding: const EdgeInsets.all(10),
+                                        child: Text(item.model, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.all(10),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                                            const SizedBox(height: 4),
+                                            Text(item.room, style: Theme.of(context).textTheme.bodySmall),
+                                            const SizedBox(height: 8),
+                                            Wrap(
+                                              spacing: 6,
+                                              runSpacing: 6,
+                                              children: item.tags.take(2).map((t) => Chip(label: Text(t.name), visualDensity: VisualDensity.compact)).toList(),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }, childCount: list.length),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              mainAxisSpacing: 12,
+                              crossAxisSpacing: 12,
+                              childAspectRatio: .82,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                  SliverPersistentHeader(
-                    pinned: true,
-                    delegate: _SearchHeaderDelegate(
-                      minExtentValue: 60,
-                      maxExtentValue: 72,
-                      childBuilder: (progress) {
-                        final avatarOpacity = (1 - progress).clamp(0.0, 1.0);
-                        final verticalPad = lerpDouble(10, 6, progress) ?? 8;
-                        return Padding(
-                          padding: EdgeInsets.fromLTRB(16, verticalPad, 16, 8),
-                          child: Container(
-                            height: lerpDouble(52, 46, progress) ?? 48,
+
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      color: Theme.of(context).colorScheme.surface,
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AnimatedOpacity(
+                            opacity: logoOpacity,
+                            duration: const Duration(milliseconds: 120),
+                            child: SizedBox(
+                              height: 36 * logoOpacity,
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text('Finder', style: Theme.of(context).textTheme.headlineMedium),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            height: searchHeight,
                             decoration: BoxDecoration(
                               color: Theme.of(context).colorScheme.surfaceContainerHigh,
                               borderRadius: BorderRadius.circular(24),
@@ -137,126 +247,14 @@ class _LibraryPageState extends State<LibraryPage> {
                               ],
                             ),
                           ),
-                        );
-                      },
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 52,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        children: tags.map((e) {
-                          final selected = _selectedTag == e.$1;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: FilterChip(
-                              label: Text(e.$2),
-                              selected: selected,
-                              onSelected: (v) => setState(() => _selectedTag = v ? e.$1 : null),
-                              showCheckmark: false,
-                            ),
-                          );
-                        }).toList(),
+                        ],
                       ),
                     ),
                   ),
-                  if (list.isEmpty)
-                    const SliverFillRemaining(child: Center(child: Text('暂无数据')))
-                  else
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                      sliver: SliverGrid(
-                        delegate: SliverChildBuilderDelegate((context, i) {
-                          final item = list[i];
-                          return Card(
-                            elevation: 0,
-                            clipBehavior: Clip.antiAlias,
-                            child: InkWell(
-                              onTap: () => showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                showDragHandle: true,
-                                useSafeArea: true,
-                                builder: (_) => FractionallySizedBox(
-                                  heightFactor: 0.74,
-                                  child: _ManualDetailSheet(item: item),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    height: 90,
-                                    color: _coverColor(item.coverGradient, context),
-                                    alignment: Alignment.bottomLeft,
-                                    padding: const EdgeInsets.all(10),
-                                    child: Text(item.model, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.all(10),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                                        const SizedBox(height: 4),
-                                        Text(item.room, style: Theme.of(context).textTheme.bodySmall),
-                                        const SizedBox(height: 8),
-                                        Wrap(
-                                          spacing: 6,
-                                          runSpacing: 6,
-                                          children: item.tags.take(2).map((t) => Chip(label: Text(t.name), visualDensity: VisualDensity.compact)).toList(),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }, childCount: list.length),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: .82,
-                        ),
-                      ),
-                    ),
                 ],
               ),
       ),
     );
-  }
-}
-
-class _SearchHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final double minExtentValue;
-  final double maxExtentValue;
-  final Widget Function(double progress) childBuilder;
-
-  _SearchHeaderDelegate({
-    required this.minExtentValue,
-    required this.maxExtentValue,
-    required this.childBuilder,
-  });
-
-  @override
-  double get minExtent => minExtentValue;
-
-  @override
-  double get maxExtent => maxExtentValue;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    final progress = (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0);
-    return Container(color: Theme.of(context).colorScheme.surface, child: childBuilder(progress));
-  }
-
-  @override
-  bool shouldRebuild(covariant _SearchHeaderDelegate oldDelegate) {
-    return oldDelegate.minExtentValue != minExtentValue || oldDelegate.maxExtentValue != maxExtentValue;
   }
 }
 
