@@ -10,37 +10,31 @@ class UploadPickerService {
   Future<CachedUpload?> pickFromCamera() async {
     final XFile? file = await _picker.pickImage(source: ImageSource.camera, imageQuality: 90);
     if (file == null) return null;
-    return CachedUpload(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      name: file.name,
-      path: file.path,
-      source: UploadSource.camera,
-      createdAt: DateTime.now(),
-    );
+    return _toUpload(file.path, file.name, UploadSource.camera);
   }
 
-  Future<CachedUpload?> pickFromGallery() async {
-    final XFile? file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 92);
-    if (file == null) return null;
-    return CachedUpload(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      name: file.name,
-      path: file.path,
-      source: UploadSource.gallery,
-      createdAt: DateTime.now(),
-    );
+  Future<List<CachedUpload>> pickMultiFromGallery() async {
+    final files = await _picker.pickMultiImage(imageQuality: 92);
+    if (files.isEmpty) return [];
+    return files.map((f) => _toUpload(f.path, f.name, UploadSource.gallery)).toList();
   }
 
-  Future<CachedUpload?> pickFromFiles() async {
-    final result = await FilePicker.platform.pickFiles(allowMultiple: false, withData: false);
-    if (result == null || result.files.isEmpty) return null;
-    final f = result.files.first;
-    final fileName = f.name.isNotEmpty ? f.name : (f.path ?? 'unknown');
+  Future<List<CachedUpload>> pickFromFiles() async {
+    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: false);
+    if (result == null || result.files.isEmpty) return [];
+
+    return result.files
+        .where((f) => (f.path ?? '').isNotEmpty)
+        .map((f) => _toUpload(f.path!, f.name.isNotEmpty ? f.name : 'unknown', UploadSource.file))
+        .toList();
+  }
+
+  CachedUpload _toUpload(String path, String name, UploadSource source) {
     return CachedUpload(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      name: fileName,
-      path: f.path ?? '',
-      source: UploadSource.file,
+      id: '${DateTime.now().microsecondsSinceEpoch}-${name.hashCode}',
+      name: name,
+      path: path,
+      source: source,
       createdAt: DateTime.now(),
     );
   }

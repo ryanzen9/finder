@@ -1,61 +1,55 @@
-import 'package:finder/app/config.dart';
+import 'dart:io';
+
 import 'package:finder/models/user_profile.dart';
 import 'package:finder/utils/net/api.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 class SocialAuthService {
-  Future<void> ensureInitialized() async {
-    try {
-      Supabase.instance.client;
-    } catch (_) {
-      await Supabase.initialize(
-        url: Config.supabaseUrl,
-        anonKey: Config.supabaseAnonKey,
-      );
-    }
-  }
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: const ['email', 'profile'],
+  );
 
   Future<UserProfile?> signInWithGoogle() async {
-    await ensureInitialized();
-    final client = Supabase.instance.client;
-    await client.auth.signInWithOAuth(
-      OAuthProvider.google,
-      authScreenLaunchMode: LaunchMode.inAppWebView,
-      redirectTo: 'io.supabase.flutter://login-callback/',
-      queryParams: const {'access_type': 'offline', 'prompt': 'consent'},
+    final account = await _googleSignIn.signIn();
+    if (account == null) return null;
+
+    return UserProfile(
+      id: account.id,
+      nickname: account.displayName ?? account.email,
+      avatarUrl: account.photoUrl,
+      provider: 'google',
     );
-    final user = client.auth.currentUser;
-    if (user == null) return null;
-    return _mapUser(user, 'google');
   }
 
   Future<UserProfile?> signInWithApple() async {
-    await ensureInitialized();
-    final client = Supabase.instance.client;
-    await client.auth.signInWithOAuth(
-      OAuthProvider.apple,
-      authScreenLaunchMode: LaunchMode.inAppWebView,
-      redirectTo: 'io.supabase.flutter://login-callback/',
+    if (!Platform.isIOS && !Platform.isMacOS) {
+      throw Exception('Apple 登录仅支持 iOS/macOS');
+    }
+
+    final credential = await SignInWithApple.getAppleIDCredential(
+      scopes: [
+        AppleIDAuthorizationScopes.email,
+        AppleIDAuthorizationScopes.fullName,
+      ],
     );
-    final user = client.auth.currentUser;
-    if (user == null) return null;
-    return _mapUser(user, 'apple');
+
+    final name = [credential.givenName, credential.familyName]
+        .where((e) => (e ?? '').isNotEmpty)
+        .join(' ')
+        .trim();
+
+    return UserProfile(
+      id: credential.userIdentifier ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      nickname: name.isNotEmpty ? name : (credential.email ?? 'Apple User'),
+      avatarUrl: null,
+      provider: 'apple',
+    );
   }
 
   Future<void> syncProfileToBackend(UserProfile profile) async {
-    // 后端接口结构先定义，服务端后续补齐实现
+    // 后端接口结构定义：POST /auth/profile/sync
+    // body: { id, nickname, avatarUrl, provider }
     await Api.post('/auth/profile/sync', data: profile.toJson());
-  }
-
-  UserProfile _mapUser(User user, String provider) {
-    final meta = user.userMetadata ?? {};
-    final nickname = (meta['full_name'] ?? meta['name'] ?? user.email ?? 'User').toString();
-    final avatar = (meta['avatar_url'] ?? meta['picture'])?.toString();
-    return UserProfile(
-      id: user.id,
-      nickname: nickname,
-      avatarUrl: avatar,
-      provider: provider,
-    );
   }
 }
