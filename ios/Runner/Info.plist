@@ -45,5 +45,12 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<key>NSCameraUsageDescription</key>
+	<string>需要访问相机以拍照上传说明书</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>需要访问相册以选择图片上传说明书</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>需要保存或处理上传图片</string>
 </dict>
 </plist>

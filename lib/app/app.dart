@@ -1,5 +1,7 @@
 import 'package:finder/api/finder_api.dart';
 import 'package:finder/api/finder_mock_api.dart';
+import 'package:finder/models/upload_asset.dart';
+import 'package:finder/services/upload_picker_service.dart';
 import 'package:finder/views/explore.dart';
 import 'package:finder/views/library.dart';
 import 'package:finder/views/settings.dart';
@@ -15,11 +17,75 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   final IFinderApi _api = const FinderMockApi();
+  final UploadPickerService _uploadService = UploadPickerService();
+  final List<CachedUpload> _cachedUploads = [];
+
+
+  Future<void> _openScanPicker() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('拍照上传'),
+              subtitle: const Text('调用相机拍摄后上传'),
+              onTap: () => Navigator.pop(ctx, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('相册选择'),
+              subtitle: const Text('从系统相册选择图片'),
+              onTap: () => Navigator.pop(ctx, 'gallery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.attach_file_outlined),
+              title: const Text('文件上传'),
+              subtitle: const Text('从文件系统选择文档/PDF'),
+              onTap: () => Navigator.pop(ctx, 'file'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (action == null) return;
+
+    try {
+      CachedUpload? upload;
+      if (action == 'camera') {
+        upload = await _uploadService.pickFromCamera();
+      } else if (action == 'gallery') {
+        upload = await _uploadService.pickFromGallery();
+      } else {
+        upload = await _uploadService.pickFromFiles();
+      }
+
+      if (!mounted || upload == null) return;
+
+      setState(() {
+        _cachedUploads.insert(0, upload!);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已缓存：${upload.name}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('上传失败：$e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final pages = [
-      LibraryPage(api: _api),
+      LibraryPage(api: _api, cachedUploads: _cachedUploads),
       ExplorePage(api: _api),
       const SettingsPage(),
     ];
@@ -28,12 +94,8 @@ class _MainScreenState extends State<MainScreen> {
       body: IndexedStack(index: _currentIndex, children: pages),
       floatingActionButton: _currentIndex == 0
           ? FloatingActionButton.extended(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Scan 模块（Mock）')),
-                );
-              },
-              label: const Text('Scan'),
+              onPressed: _openScanPicker,
+              label: Text(_cachedUploads.isEmpty ? 'Scan' : 'Scan (${_cachedUploads.length})'),
               icon: const Icon(Icons.camera_alt_outlined),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             )

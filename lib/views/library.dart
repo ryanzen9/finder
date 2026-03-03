@@ -2,11 +2,14 @@ import 'dart:ui';
 
 import 'package:finder/api/finder_api.dart';
 import 'package:finder/models/manual.dart';
+import 'package:finder/models/upload_asset.dart';
 import 'package:flutter/material.dart';
 
 class LibraryPage extends StatefulWidget {
   final IFinderApi api;
-  const LibraryPage({super.key, required this.api});
+  final List<CachedUpload> cachedUploads;
+
+  const LibraryPage({super.key, required this.api, required this.cachedUploads});
 
   @override
   State<LibraryPage> createState() => _LibraryPageState();
@@ -107,6 +110,55 @@ class _LibraryPageState extends State<LibraryPage> {
                     controller: _scrollCtrl,
                     slivers: [
                       const SliverToBoxAdapter(child: SizedBox(height: 118)),
+
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.inventory_2_outlined, size: 18),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '本地缓存上传 (${widget.cachedUploads.length})',
+                                    style: Theme.of(context).textTheme.titleSmall,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              if (widget.cachedUploads.isEmpty)
+                                Text(
+                                  '暂无缓存，点击右下角 Scan 进行上传',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                )
+                              else
+                                SizedBox(
+                                  height: 36,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: widget.cachedUploads.length,
+                                    separatorBuilder: (_, __) => const SizedBox(width: 6),
+                                    itemBuilder: (context, i) {
+                                      final u = widget.cachedUploads[i];
+                                      final sourceText = switch (u.source) {
+                                        UploadSource.camera => '相机',
+                                        UploadSource.gallery => '相册',
+                                        UploadSource.file => '文件',
+                                      };
+                                      return Chip(
+                                        avatar: const Icon(Icons.insert_drive_file_outlined, size: 16),
+                                        label: Text('$sourceText · ${u.name}', overflow: TextOverflow.ellipsis),
+                                      );
+                                    },
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+
                       SliverToBoxAdapter(
                         child: SizedBox(
                           height: 52,
