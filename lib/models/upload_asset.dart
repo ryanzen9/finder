@@ -14,6 +14,7 @@ class CachedUpload {
   final String nickname;
   final SyncStatus syncStatus;
   final String? syncMessage;
+  final bool isDraft;
 
   const CachedUpload({
     required this.id,
@@ -27,6 +28,7 @@ class CachedUpload {
     this.nickname = '',
     this.syncStatus = SyncStatus.pending,
     this.syncMessage,
+    this.isDraft = false,
   });
 
   CachedUpload copyWith({
@@ -41,6 +43,7 @@ class CachedUpload {
     String? nickname,
     SyncStatus? syncStatus,
     String? syncMessage,
+    bool? isDraft,
   }) {
     return CachedUpload(
       id: id ?? this.id,
@@ -54,6 +57,7 @@ class CachedUpload {
       nickname: nickname ?? this.nickname,
       syncStatus: syncStatus ?? this.syncStatus,
       syncMessage: syncMessage ?? this.syncMessage,
+      isDraft: isDraft ?? this.isDraft,
     );
   }
 }

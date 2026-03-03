@@ -48,12 +48,32 @@ class _LibraryPageState extends State<LibraryPage> {
 
   List<ManualItem> get _filtered {
     final q = _searchCtrl.text.trim().toLowerCase();
-    return _all.where((e) {
+
+    final fromUploads = widget.cachedUploads
+        .where((u) => !u.isDraft && u.syncStatus == SyncStatus.synced)
+        .map((u) => ManualItem(
+              id: 'up-${u.id}',
+              title: u.nickname.isNotEmpty ? u.nickname : u.name,
+              brand: u.brand.isNotEmpty ? u.brand : 'Unknown',
+              model: u.category.isNotEmpty ? u.category : '未分类',
+              room: '本地上传',
+              updatedAt: u.createdAt,
+              tags: [
+                ManualTag(id: 'upload', name: '上传'),
+                if (u.category.isNotEmpty) ManualTag(id: 'cat', name: u.category),
+              ],
+              coverGradient: 'purple',
+              underWarranty: false,
+            ))
+        .toList();
+
+    final merged = [...fromUploads, ..._all];
+    return merged.where((e) {
       final matchQ = q.isEmpty ||
           e.title.toLowerCase().contains(q) ||
           e.brand.toLowerCase().contains(q) ||
           e.model.toLowerCase().contains(q);
-      final matchTag = _selectedTag == null || e.tags.any((t) => t.id == _selectedTag);
+      final matchTag = _selectedTag == null || e.tags.any((t) => t.id == _selectedTag || t.name == _selectedTag);
       return matchQ && matchTag;
     }).toList();
   }
@@ -111,53 +131,6 @@ class _LibraryPageState extends State<LibraryPage> {
                     slivers: [
                       const SliverToBoxAdapter(child: SizedBox(height: 118)),
 
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.inventory_2_outlined, size: 18),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '本地缓存上传 (${widget.cachedUploads.length})',
-                                    style: Theme.of(context).textTheme.titleSmall,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              if (widget.cachedUploads.isEmpty)
-                                Text(
-                                  '暂无缓存，点击右下角 Scan 进行上传',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                )
-                              else
-                                SizedBox(
-                                  height: 36,
-                                  child: ListView.separated(
-                                    scrollDirection: Axis.horizontal,
-                                    itemCount: widget.cachedUploads.length,
-                                    separatorBuilder: (_, __) => const SizedBox(width: 6),
-                                    itemBuilder: (context, i) {
-                                      final u = widget.cachedUploads[i];
-                                      final sourceText = switch (u.source) {
-                                        UploadSource.camera => '相机',
-                                        UploadSource.gallery => '相册',
-                                        UploadSource.file => '文件',
-                                      };
-                                      return Chip(
-                                        avatar: const Icon(Icons.insert_drive_file_outlined, size: 16),
-                                        label: Text('$sourceText · ${u.name}', overflow: TextOverflow.ellipsis),
-                                      );
-                                    },
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
 
                       SliverToBoxAdapter(
                         child: SizedBox(

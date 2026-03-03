@@ -28,6 +28,8 @@ class _MainScreenState extends State<MainScreen> {
   final List<CachedUpload> _cachedUploads = [];
   bool _cacheReady = false;
 
+  int get _draftCount => _cachedUploads.where((e) => e.isDraft).length;
+
   @override
   void initState() {
     super.initState();
@@ -79,24 +81,17 @@ class _MainScreenState extends State<MainScreen> {
 
     if (action == null) return;
 
-    try {
-      CachedUpload? picked;
-      if (action == 'camera') {
-        picked = await _uploadService.pickFromCamera();
-      } else if (action == 'gallery') {
-        picked = await _uploadService.pickFromGallery();
-      } else {
-        picked = await _uploadService.pickFromFiles();
-      }
-
-      if (!mounted || picked == null) return;
-      await _openUploadFormSheet(picked);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('选择失败：$e')),
-      );
+    CachedUpload? picked;
+    if (action == 'camera') {
+      picked = await _uploadService.pickFromCamera();
+    } else if (action == 'gallery') {
+      picked = await _uploadService.pickFromGallery();
+    } else {
+      picked = await _uploadService.pickFromFiles();
     }
+
+    if (!mounted || picked == null) return;
+    await _openUploadFormSheet(picked);
   }
 
   Future<void> _openUploadFormSheet(CachedUpload upload) async {
@@ -113,10 +108,19 @@ class _MainScreenState extends State<MainScreen> {
     setState(() => _cachedUploads.insert(0, result));
     await _cacheService.save(_cachedUploads);
 
+    if (result.isDraft) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已保存草稿')),
+      );
+      return;
+    }
+
     final sync = await _syncService.sync(result);
     final syncedUpload = result.copyWith(
       syncStatus: sync.ok ? SyncStatus.synced : SyncStatus.failed,
       syncMessage: sync.message,
+      isDraft: !sync.ok,
     );
 
     final idx = _cachedUploads.indexWhere((e) => e.id == result.id);
@@ -129,7 +133,17 @@ class _MainScreenState extends State<MainScreen> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(sync.ok ? '已本地保存并完成远程同步' : '已本地保存，远程同步失败')),
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: sync.ok ? Colors.green.shade600 : Colors.orange.shade700,
+        content: Row(
+          children: [
+            Icon(sync.ok ? Icons.check_circle_outline : Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(sync.ok ? '上传成功，已加入本地书架' : '本地已保存，远程同步失败'),
+          ],
+        ),
+      ),
     );
   }
 
@@ -141,12 +155,14 @@ class _MainScreenState extends State<MainScreen> {
       const SettingsPage(),
     ];
 
+    final scanLabel = !_cacheReady ? 'Scan (...)' : (_draftCount == 0 ? 'Scan' : 'Scan ($_draftCount)');
+
     return Scaffold(
       body: IndexedStack(index: _currentIndex, children: pages),
       floatingActionButton: _currentIndex == 0
           ? FloatingActionButton.extended(
               onPressed: _openScanPicker,
-              label: Text(!_cacheReady ? 'Scan (...)' : (_cachedUploads.isEmpty ? 'Scan' : 'Scan (${_cachedUploads.length})')),
+              label: Text(scanLabel),
               icon: const Icon(Icons.camera_alt_outlined),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             )
@@ -204,21 +220,32 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
     super.dispose();
   }
 
-  Future<bool> _confirmDiscardIfNeeded() async {
-    if (!_dirty) return true;
-    final shouldLeave = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('放弃填写内容？'),
-            content: const Text('你已填写部分内容，下拉关闭会丢失这些输入。'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('继续编辑')),
-              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('放弃')),
-            ],
-          ),
-        ) ??
-        false;
-    return shouldLeave;
+  Future<_CloseAction> _confirmCloseAction() async {
+    if (!_dirty) return _CloseAction.discard;
+    final action = await showDialog<_CloseAction>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('检测到未保存内容'),
+        content: const Text('你可以放弃修改，或先保存草稿后稍后继续。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, _CloseAction.cancel), child: const Text('继续编辑')),
+          TextButton(onPressed: () => Navigator.pop(ctx, _CloseAction.discard), child: const Text('放弃修改')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, _CloseAction.draft), child: const Text('保存草稿')),
+        ],
+      ),
+    );
+    return action ?? _CloseAction.cancel;
+  }
+
+  CachedUpload _buildResult({required bool draft}) {
+    return widget.initial.copyWith(
+      brand: _brandCtrl.text.trim(),
+      category: _categoryCtrl.text.trim(),
+      nickname: _nickCtrl.text.trim(),
+      description: _descCtrl.text.trim(),
+      syncStatus: draft ? SyncStatus.pending : SyncStatus.pending,
+      isDraft: draft,
+    );
   }
 
   @override
@@ -227,25 +254,31 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
       canPop: !_dirty,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        final leave = await _confirmDiscardIfNeeded();
+        final act = await _confirmCloseAction();
         if (!context.mounted) return;
-        if (leave) Navigator.of(context).pop();
+        if (act == _CloseAction.discard) {
+          Navigator.of(context).pop();
+        } else if (act == _CloseAction.draft) {
+          Navigator.of(context).pop(_buildResult(draft: true));
+        }
       },
       child: DraggableScrollableSheet(
-        initialChildSize: 0.86,
+        initialChildSize: 0.88,
         minChildSize: 0.5,
         maxChildSize: 0.95,
         expand: false,
         builder: (context, controller) {
           return Material(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             clipBehavior: Clip.antiAlias,
             child: ListView(
               controller: controller,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
-                const SizedBox(height: 8),
-                Text('上传资料', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 6),
+                Text('上传资料', style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 6),
+                Text('填写资料后将保存到本地并同步到远程', style: Theme.of(context).textTheme.bodySmall),
                 const SizedBox(height: 12),
                 _PreviewCard(upload: widget.initial),
                 const SizedBox(height: 16),
@@ -255,44 +288,48 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
                     children: [
                       TextFormField(
                         controller: _brandCtrl,
-                        decoration: const InputDecoration(labelText: '品牌*', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(labelText: '品牌 *', filled: true, border: OutlineInputBorder()),
                         validator: (v) => (v == null || v.trim().isEmpty) ? '请输入品牌' : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _categoryCtrl,
-                        decoration: const InputDecoration(labelText: '分类*', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(labelText: '分类 *', filled: true, border: OutlineInputBorder()),
                         validator: (v) => (v == null || v.trim().isEmpty) ? '请输入分类' : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _nickCtrl,
-                        decoration: const InputDecoration(labelText: '昵称', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(labelText: '昵称', filled: true, border: OutlineInputBorder()),
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _descCtrl,
                         maxLines: 4,
-                        decoration: const InputDecoration(labelText: '描述', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(labelText: '描述', filled: true, border: OutlineInputBorder()),
                       ),
                       const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          icon: const Icon(Icons.cloud_upload_outlined),
-                          label: const Text('保存并同步'),
-                          onPressed: () {
-                            if (!_formKey.currentState!.validate()) return;
-                            final result = widget.initial.copyWith(
-                              brand: _brandCtrl.text.trim(),
-                              category: _categoryCtrl.text.trim(),
-                              nickname: _nickCtrl.text.trim(),
-                              description: _descCtrl.text.trim(),
-                              syncStatus: SyncStatus.pending,
-                            );
-                            Navigator.pop(context, result);
-                          },
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.save_outlined),
+                              label: const Text('保存草稿'),
+                              onPressed: () => Navigator.pop(context, _buildResult(draft: true)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FilledButton.icon(
+                              icon: const Icon(Icons.cloud_upload_outlined),
+                              label: const Text('保存并上传'),
+                              onPressed: () {
+                                if (!_formKey.currentState!.validate()) return;
+                                Navigator.pop(context, _buildResult(draft: false));
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -306,6 +343,8 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
   }
 }
 
+enum _CloseAction { cancel, discard, draft }
+
 class _PreviewCard extends StatelessWidget {
   final CachedUpload upload;
   const _PreviewCard({required this.upload});
@@ -314,6 +353,11 @@ class _PreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ext = upload.name.toLowerCase();
     final isImage = ext.endsWith('.png') || ext.endsWith('.jpg') || ext.endsWith('.jpeg') || upload.source != UploadSource.file;
+    final sourceText = switch (upload.source) {
+      UploadSource.camera => '相机',
+      UploadSource.gallery => '相册',
+      UploadSource.file => '文件',
+    };
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -324,19 +368,31 @@ class _PreviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(upload.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+          Row(
+            children: [
+              Chip(label: Text(sourceText)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(upload.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+              ),
+            ],
+          ),
           const SizedBox(height: 10),
           if (isImage && upload.path.isNotEmpty)
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.file(File(upload.path), height: 180, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) {
-                return Container(
+              child: Image.file(
+                File(upload.path),
+                height: 180,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
                   height: 120,
                   alignment: Alignment.center,
                   color: Theme.of(context).colorScheme.surfaceContainerHigh,
                   child: const Text('图片预览失败'),
-                );
-              }),
+                ),
+              ),
             )
           else
             Container(

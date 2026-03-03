@@ -34,6 +34,7 @@ class UploadCacheService {
       'nickname': e.nickname,
       'syncStatus': e.syncStatus.name,
       'syncMessage': e.syncMessage,
+      'isDraft': e.isDraft,
     };
   }
 
@@ -62,6 +63,7 @@ class UploadCacheService {
       nickname: (json['nickname'] ?? '').toString(),
       syncStatus: syncStatus,
       syncMessage: json['syncMessage']?.toString(),
+      isDraft: json['isDraft'] == true,
     );
   }
 }
