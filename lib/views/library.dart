@@ -15,9 +15,35 @@ class LibraryPage extends StatefulWidget {
 class _LibraryPageState extends State<LibraryPage> {
   final _searchCtrl = TextEditingController();
   String? _selectedTag;
+  bool _loading = true;
+  List<ManualItem> _all = const [];
 
-  Future<List<ManualItem>> _load() {
-    return widget.api.getLibrary(keyword: _searchCtrl.text, tag: _selectedTag);
+  @override
+  void initState() {
+    super.initState();
+    _initLoad();
+  }
+
+  Future<void> _initLoad() async {
+    setState(() => _loading = true);
+    final data = await widget.api.getLibrary();
+    if (!mounted) return;
+    setState(() {
+      _all = data;
+      _loading = false;
+    });
+  }
+
+  List<ManualItem> get _filtered {
+    final q = _searchCtrl.text.trim().toLowerCase();
+    return _all.where((e) {
+      final matchQ = q.isEmpty ||
+          e.title.toLowerCase().contains(q) ||
+          e.brand.toLowerCase().contains(q) ||
+          e.model.toLowerCase().contains(q);
+      final matchTag = _selectedTag == null || e.tags.any((t) => t.id == _selectedTag);
+      return matchQ && matchTag;
+    }).toList();
   }
 
   Color _coverColor(String key, BuildContext context) {
@@ -40,6 +66,12 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final tags = const [
       ('tv', '影音'),
@@ -49,160 +81,151 @@ class _LibraryPageState extends State<LibraryPage> {
       ('warranty', '保修中'),
     ];
 
+    final list = _filtered;
+
     return Scaffold(
       body: SafeArea(
-        child: FutureBuilder<List<ManualItem>>(
-          future: _load(),
-          builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final list = snap.data ?? [];
-            return CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                    child: Text('Finder', style: Theme.of(context).textTheme.headlineMedium),
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: Text('Finder', style: Theme.of(context).textTheme.headlineMedium),
+                    ),
                   ),
-                ),
-                SliverPersistentHeader(
-                  pinned: true,
-                  delegate: _SearchHeaderDelegate(
-                    minExtentValue: 62,
-                    maxExtentValue: 92,
-                    childBuilder: (progress) {
-                      final avatarOpacity = 1 - progress;
-                      final verticalPad = lerpDouble(14, 8, progress) ?? 10;
-                      return Padding(
-                        padding: EdgeInsets.fromLTRB(16, verticalPad, 16, 8),
-                        child: Container(
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: Row(
-                            children: [
-                              const SizedBox(width: 12),
-                              Icon(Icons.search, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: TextField(
-                                  controller: _searchCtrl,
-                                  onChanged: (_) => setState(() {}),
-                                  decoration: const InputDecoration(
-                                    border: InputBorder.none,
-                                    hintText: '搜索说明书、品牌或型号',
-                                    isCollapsed: true,
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _SearchHeaderDelegate(
+                      minExtentValue: 62,
+                      maxExtentValue: 92,
+                      childBuilder: (progress) {
+                        final avatarOpacity = (1 - progress).clamp(0.0, 1.0);
+                        final verticalPad = lerpDouble(14, 8, progress) ?? 10;
+                        return Padding(
+                          padding: EdgeInsets.fromLTRB(16, verticalPad, 16, 8),
+                          child: Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 12),
+                                Icon(Icons.search, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _searchCtrl,
+                                    onChanged: (_) => setState(() {}),
+                                    decoration: const InputDecoration(
+                                      border: InputBorder.none,
+                                      hintText: '搜索说明书、品牌或型号',
+                                      isCollapsed: true,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              IgnorePointer(
-                                ignoring: progress > 0.7,
-                                child: AnimatedOpacity(
-                                  opacity: avatarOpacity.clamp(0, 1),
-                                  duration: const Duration(milliseconds: 120),
+                                Opacity(
+                                  opacity: avatarOpacity,
                                   child: const Padding(
                                     padding: EdgeInsets.only(right: 6),
                                     child: CircleAvatar(radius: 16, child: Text('林')),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 52,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      children: tags.map((e) {
-                        final selected = _selectedTag == e.$1;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: FilterChip(
-                            label: Text(e.$2),
-                            selected: selected,
-                            onSelected: (v) => setState(() => _selectedTag = v ? e.$1 : null),
-                            showCheckmark: false,
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-                if (list.isEmpty)
-                  const SliverFillRemaining(child: Center(child: Text('暂无数据')))
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                    sliver: SliverGrid(
-                      delegate: SliverChildBuilderDelegate((context, i) {
-                        final item = list[i];
-                        return Card(
-                          elevation: 0,
-                          clipBehavior: Clip.antiAlias,
-                          child: InkWell(
-                            onTap: () => showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              showDragHandle: true,
-                              useSafeArea: true,
-                              builder: (_) => FractionallySizedBox(
-                                heightFactor: 0.74,
-                                child: _ManualDetailSheet(item: item),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  height: 90,
-                                  color: _coverColor(item.coverGradient, context),
-                                  alignment: Alignment.bottomLeft,
-                                  padding: const EdgeInsets.all(10),
-                                  child: Text(item.model, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(10),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                                      const SizedBox(height: 4),
-                                      Text(item.room, style: Theme.of(context).textTheme.bodySmall),
-                                      const SizedBox(height: 8),
-                                      Wrap(
-                                        spacing: 6,
-                                        runSpacing: 6,
-                                        children: item.tags.take(2).map((t) => Chip(label: Text(t.name), visualDensity: VisualDensity.compact)).toList(),
-                                      ),
-                                    ],
                                   ),
                                 ),
                               ],
                             ),
                           ),
                         );
-                      }, childCount: list.length),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: .82,
+                      },
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: 52,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        children: tags.map((e) {
+                          final selected = _selectedTag == e.$1;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: FilterChip(
+                              label: Text(e.$2),
+                              selected: selected,
+                              onSelected: (v) => setState(() => _selectedTag = v ? e.$1 : null),
+                              showCheckmark: false,
+                            ),
+                          );
+                        }).toList(),
                       ),
                     ),
                   ),
-              ],
-            );
-          },
-        ),
+                  if (list.isEmpty)
+                    const SliverFillRemaining(child: Center(child: Text('暂无数据')))
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                      sliver: SliverGrid(
+                        delegate: SliverChildBuilderDelegate((context, i) {
+                          final item = list[i];
+                          return Card(
+                            elevation: 0,
+                            clipBehavior: Clip.antiAlias,
+                            child: InkWell(
+                              onTap: () => showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                showDragHandle: true,
+                                useSafeArea: true,
+                                builder: (_) => FractionallySizedBox(
+                                  heightFactor: 0.74,
+                                  child: _ManualDetailSheet(item: item),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    height: 90,
+                                    color: _coverColor(item.coverGradient, context),
+                                    alignment: Alignment.bottomLeft,
+                                    padding: const EdgeInsets.all(10),
+                                    child: Text(item.model, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(10),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                                        const SizedBox(height: 4),
+                                        Text(item.room, style: Theme.of(context).textTheme.bodySmall),
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 6,
+                                          children: item.tags.take(2).map((t) => Chip(label: Text(t.name), visualDensity: VisualDensity.compact)).toList(),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }, childCount: list.length),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: .82,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
       ),
     );
   }
@@ -228,16 +251,12 @@ class _SearchHeaderDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     final progress = (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0);
-    return Container(
-      color: Theme.of(context).colorScheme.surface,
-      child: childBuilder(progress),
-    );
+    return Container(color: Theme.of(context).colorScheme.surface, child: childBuilder(progress));
   }
 
   @override
   bool shouldRebuild(covariant _SearchHeaderDelegate oldDelegate) {
-    return oldDelegate.minExtentValue != minExtentValue ||
-        oldDelegate.maxExtentValue != maxExtentValue;
+    return oldDelegate.minExtentValue != minExtentValue || oldDelegate.maxExtentValue != maxExtentValue;
   }
 }
 
@@ -271,11 +290,7 @@ class _ManualDetailSheet extends StatelessWidget {
         const SizedBox(height: 8),
         Text('${item.brand} · ${item.model} · ${item.room}'),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: item.tags.map((t) => Chip(label: Text(t.name))).toList(),
-        ),
+        Wrap(spacing: 8, runSpacing: 8, children: item.tags.map((t) => Chip(label: Text(t.name))).toList()),
         const SizedBox(height: 16),
         Card(
           elevation: 0,
@@ -294,11 +309,7 @@ class _ManualDetailSheet extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: () {},
-          icon: const Icon(Icons.menu_book_outlined),
-          label: const Text('打开说明书'),
-        ),
+        FilledButton.icon(onPressed: () {}, icon: const Icon(Icons.menu_book_outlined), label: const Text('打开说明书')),
       ],
     );
   }
