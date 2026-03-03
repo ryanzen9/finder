@@ -11,6 +11,8 @@ class LibraryPage extends StatefulWidget {
   final List<CachedUpload> cachedUploads;
   final UserProfile? profile;
   final VoidCallback onAvatarTap;
+  final Future<void> Function(String uploadId) onRemoveUpload;
+  final Future<void> Function(String uploadId, {required String title, required String brand, required String category, required String description}) onUpdateUpload;
 
   const LibraryPage({
     super.key,
@@ -18,6 +20,8 @@ class LibraryPage extends StatefulWidget {
     required this.cachedUploads,
     required this.profile,
     required this.onAvatarTap,
+    required this.onRemoveUpload,
+    required this.onUpdateUpload,
   });
 
   @override
@@ -170,51 +174,84 @@ class _LibraryPageState extends State<LibraryPage> {
                           sliver: SliverGrid(
                             delegate: SliverChildBuilderDelegate((context, i) {
                               final item = list[i];
+                              final isUpload = item.id.startsWith('up-');
                               return Card(
                                 elevation: 0,
                                 clipBehavior: Clip.antiAlias,
-                                child: InkWell(
-                                  onTap: () => showModalBottomSheet(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    showDragHandle: true,
-                                    useSafeArea: true,
-                                    builder: (_) => FractionallySizedBox(
-                                      heightFactor: 0.74,
-                                      child: _ManualDetailSheet(item: item),
-                                    ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Container(
-                                        height: 90,
-                                        color: _coverColor(item.coverGradient, context),
-                                        alignment: Alignment.bottomLeft,
-                                        padding: const EdgeInsets.all(10),
-                                        child: Text(item.model, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                                      ),
-                                      Expanded(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(10),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                                              const SizedBox(height: 4),
-                                              Text(item.room, style: Theme.of(context).textTheme.bodySmall),
-                                              const Spacer(),
-                                              if (item.tags.isNotEmpty)
-                                                Chip(
-                                                  label: Text(item.tags.first.name),
-                                                  visualDensity: VisualDensity.compact,
-                                                ),
-                                            ],
-                                          ),
+                                child: Stack(
+                                  children: [
+                                    InkWell(
+                                      onTap: () => showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        showDragHandle: true,
+                                        useSafeArea: true,
+                                        builder: (_) => FractionallySizedBox(
+                                          heightFactor: 0.74,
+                                          child: _ManualDetailSheet(item: item),
                                         ),
                                       ),
-                                    ],
-                                  ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            height: 90,
+                                            color: _coverColor(item.coverGradient, context),
+                                            alignment: Alignment.bottomLeft,
+                                            padding: const EdgeInsets.all(10),
+                                            child: Text(item.model, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                          ),
+                                          Expanded(
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(10),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                                                  const SizedBox(height: 4),
+                                                  Text(item.room, style: Theme.of(context).textTheme.bodySmall),
+                                                  const Spacer(),
+                                                  if (item.tags.isNotEmpty)
+                                                    Chip(
+                                                      label: Text(item.tags.first.name),
+                                                      visualDensity: VisualDensity.compact,
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (isUpload)
+                                      Positioned(
+                                        top: 4,
+                                        right: 4,
+                                        child: PopupMenuButton<String>(
+                                          icon: const Icon(Icons.more_vert, size: 18),
+                                          onSelected: (value) async {
+                                            if (value == 'remove') {
+                                              await widget.onRemoveUpload(item.id);
+                                            } else if (value == 'edit') {
+                                              final updated = await _showEditDialog(context, item);
+                                              if (updated != null) {
+                                                await widget.onUpdateUpload(
+                                                  item.id,
+                                                  title: updated.$1,
+                                                  brand: updated.$2,
+                                                  category: updated.$3,
+                                                  description: updated.$4,
+                                                );
+                                              }
+                                            }
+                                          },
+                                          itemBuilder: (_) => const [
+                                            PopupMenuItem(value: 'edit', child: Text('更新')),
+                                            PopupMenuItem(value: 'remove', child: Text('移除')),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               );
                             }, childCount: list.length),
@@ -302,6 +339,48 @@ class _LibraryPageState extends State<LibraryPage> {
       ),
     );
   }
+
+  Future<(String, String, String, String)?> _showEditDialog(BuildContext context, ManualItem item) async {
+    final titleCtrl = TextEditingController(text: item.title);
+    final brandCtrl = TextEditingController(text: item.brand);
+    final categoryCtrl = TextEditingController(text: item.model);
+    final descCtrl = TextEditingController();
+
+    final result = await showDialog<(String, String, String, String)>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('更新说明书信息'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: '标题')),
+              const SizedBox(height: 8),
+              TextField(controller: brandCtrl, decoration: const InputDecoration(labelText: '品牌')),
+              const SizedBox(height: 8),
+              TextField(controller: categoryCtrl, decoration: const InputDecoration(labelText: '分类')),
+              const SizedBox(height: 8),
+              TextField(controller: descCtrl, decoration: const InputDecoration(labelText: '描述')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, (titleCtrl.text.trim(), brandCtrl.text.trim(), categoryCtrl.text.trim(), descCtrl.text.trim())),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+
+    titleCtrl.dispose();
+    brandCtrl.dispose();
+    categoryCtrl.dispose();
+    descCtrl.dispose();
+    return result;
+  }
+
 }
 
 class _ManualDetailSheet extends StatelessWidget {

@@ -59,6 +59,30 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
+
+  Future<void> _removeUploadById(String uploadId) async {
+    _cachedUploads.removeWhere((e) => e.id == uploadId || 'up-${e.id}' == uploadId);
+    await _cacheService.save(_cachedUploads);
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _updateUploadMeta(String uploadId, {required String title, required String brand, required String category, required String description}) async {
+    final idx = _cachedUploads.indexWhere((e) => e.id == uploadId || 'up-${e.id}' == uploadId);
+    if (idx < 0) return;
+    final cur = _cachedUploads[idx];
+    _cachedUploads[idx] = cur.copyWith(
+      nickname: title,
+      brand: brand,
+      category: category,
+      description: description,
+      isDraft: false,
+    );
+    await _cacheService.save(_cachedUploads);
+    if (!mounted) return;
+    setState(() {});
+  }
+
   Future<void> _restoreProfile() async {
     final profile = await _authCache.load();
     if (!mounted) return;
@@ -276,7 +300,14 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      LibraryPage(api: _api, cachedUploads: _cachedUploads, profile: _profile, onAvatarTap: _onAvatarTap),
+      LibraryPage(
+        api: _api,
+        cachedUploads: _cachedUploads,
+        profile: _profile,
+        onAvatarTap: _onAvatarTap,
+        onRemoveUpload: _removeUploadById,
+        onUpdateUpload: _updateUploadMeta,
+      ),
       ExplorePage(api: _api),
       SettingsPage(themeMode: widget.themeMode, onThemeModeChanged: widget.onThemeModeChanged),
     ];
