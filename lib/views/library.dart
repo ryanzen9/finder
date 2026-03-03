@@ -212,21 +212,23 @@ class _LibraryPageState extends State<LibraryPage> {
                                         padding: const EdgeInsets.all(10),
                                         child: Text(item.model, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                                       ),
-                                      Padding(
-                                        padding: const EdgeInsets.all(10),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                                            const SizedBox(height: 4),
-                                            Text(item.room, style: Theme.of(context).textTheme.bodySmall),
-                                            const SizedBox(height: 8),
-                                            Wrap(
-                                              spacing: 6,
-                                              runSpacing: 6,
-                                              children: item.tags.take(2).map((t) => Chip(label: Text(t.name), visualDensity: VisualDensity.compact)).toList(),
-                                            ),
-                                          ],
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(10),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                                              const SizedBox(height: 4),
+                                              Text(item.room, style: Theme.of(context).textTheme.bodySmall),
+                                              const Spacer(),
+                                              if (item.tags.isNotEmpty)
+                                                Chip(
+                                                  label: Text(item.tags.first.name),
+                                                  visualDensity: VisualDensity.compact,
+                                                ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ],

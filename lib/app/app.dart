@@ -1,6 +1,7 @@
 import 'package:finder/api/finder_api.dart';
 import 'package:finder/api/finder_mock_api.dart';
 import 'package:finder/models/upload_asset.dart';
+import 'package:finder/services/upload_cache_service.dart';
 import 'package:finder/services/upload_picker_service.dart';
 import 'package:finder/views/explore.dart';
 import 'package:finder/views/library.dart';
@@ -18,8 +19,28 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   final IFinderApi _api = const FinderMockApi();
   final UploadPickerService _uploadService = UploadPickerService();
+  final UploadCacheService _cacheService = UploadCacheService();
   final List<CachedUpload> _cachedUploads = [];
+  bool _cacheReady = false;
 
+
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreUploadCache();
+  }
+
+  Future<void> _restoreUploadCache() async {
+    final restored = await _cacheService.load();
+    if (!mounted) return;
+    setState(() {
+      _cachedUploads
+        ..clear()
+        ..addAll(restored);
+      _cacheReady = true;
+    });
+  }
 
   Future<void> _openScanPicker() async {
     final action = await showModalBottomSheet<String>(
@@ -70,6 +91,8 @@ class _MainScreenState extends State<MainScreen> {
       setState(() {
         _cachedUploads.insert(0, upload!);
       });
+      await _cacheService.save(_cachedUploads);
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('已缓存：${upload.name}')),
@@ -95,7 +118,7 @@ class _MainScreenState extends State<MainScreen> {
       floatingActionButton: _currentIndex == 0
           ? FloatingActionButton.extended(
               onPressed: _openScanPicker,
-              label: Text(_cachedUploads.isEmpty ? 'Scan' : 'Scan (${_cachedUploads.length})'),
+              label: Text(!_cacheReady ? 'Scan (...)' : (_cachedUploads.isEmpty ? 'Scan' : 'Scan (${_cachedUploads.length})')),
               icon: const Icon(Icons.camera_alt_outlined),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             )
