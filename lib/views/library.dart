@@ -98,15 +98,15 @@ class _LibraryPageState extends State<LibraryPage> {
                   SliverPersistentHeader(
                     pinned: true,
                     delegate: _SearchHeaderDelegate(
-                      minExtentValue: 62,
-                      maxExtentValue: 92,
+                      minExtentValue: 60,
+                      maxExtentValue: 72,
                       childBuilder: (progress) {
                         final avatarOpacity = (1 - progress).clamp(0.0, 1.0);
-                        final verticalPad = lerpDouble(14, 8, progress) ?? 10;
+                        final verticalPad = lerpDouble(10, 6, progress) ?? 8;
                         return Padding(
                           padding: EdgeInsets.fromLTRB(16, verticalPad, 16, 8),
                           child: Container(
-                            height: 48,
+                            height: lerpDouble(52, 46, progress) ?? 48,
                             decoration: BoxDecoration(
                               color: Theme.of(context).colorScheme.surfaceContainerHigh,
                               borderRadius: BorderRadius.circular(24),
