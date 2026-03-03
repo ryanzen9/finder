@@ -200,6 +200,8 @@ class _MainScreenState extends State<MainScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
+      isDismissible: false,
+      enableDrag: false,
       showDragHandle: true,
       builder: (_) => _UploadFormSheet(
         initials: initials,
@@ -212,6 +214,15 @@ class _MainScreenState extends State<MainScreen> {
     );
 
     if (result == null || !mounted) return;
+
+    if (result.discarded) {
+      if (replacedDraftIds.isNotEmpty) {
+        _cachedUploads.removeWhere((e) => replacedDraftIds.contains(e.id));
+        await _cacheService.save(_cachedUploads);
+        if (mounted) setState(() {});
+      }
+      return;
+    }
 
     if (replacedDraftIds.isNotEmpty) {
       _cachedUploads.removeWhere((e) => replacedDraftIds.contains(e.id));
@@ -313,6 +324,7 @@ class _UploadSubmitResult {
   final String description;
   final String nickname;
   final bool isDraft;
+  final bool discarded;
 
   const _UploadSubmitResult({
     required this.uploads,
@@ -321,6 +333,7 @@ class _UploadSubmitResult {
     required this.description,
     required this.nickname,
     required this.isDraft,
+    this.discarded = false,
   });
 }
 
@@ -445,6 +458,26 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
     return action ?? _CloseAction.cancel;
   }
 
+
+  Future<void> _requestClose() async {
+    final navigator = Navigator.of(context);
+    final act = await _confirmCloseAction();
+    if (!mounted) return;
+    if (act == _CloseAction.discard) {
+      navigator.pop(const _UploadSubmitResult(
+        uploads: [],
+        brand: '',
+        category: '',
+        description: '',
+        nickname: '',
+        isDraft: false,
+        discarded: true,
+      ));
+    } else if (act == _CloseAction.draft) {
+      navigator.pop(_buildResult(draft: true));
+    }
+  }
+
   _UploadSubmitResult _buildResult({required bool draft}) {
     return _UploadSubmitResult(
       uploads: _uploads,
@@ -462,13 +495,7 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
       canPop: !_dirty,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        final act = await _confirmCloseAction();
-        if (!context.mounted) return;
-        if (act == _CloseAction.discard) {
-          Navigator.of(context).pop();
-        } else if (act == _CloseAction.draft) {
-          Navigator.of(context).pop(_buildResult(draft: true));
-        }
+        await _requestClose();
       },
       child: DraggableScrollableSheet(
         initialChildSize: 0.94,
@@ -487,11 +514,26 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
                     controller: controller,
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                     children: [
-                      Text('上传资料', style: Theme.of(context).textTheme.headlineSmall),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('上传资料', style: Theme.of(context).textTheme.headlineSmall),
+                          IconButton(onPressed: _requestClose, icon: const Icon(Icons.close)),
+                        ],
+                      ),
                       const SizedBox(height: 4),
                       Text('共 ${_uploads.length} 个文件（可继续添加）', style: Theme.of(context).textTheme.bodySmall),
                       const SizedBox(height: 10),
-                      _MultiPreviewCard(uploads: _uploads, onAddTap: _pickMore),
+                      _MultiPreviewCard(
+                        uploads: _uploads,
+                        onAddTap: _pickMore,
+                        onRemoveAt: (index) {
+                          setState(() {
+                            _uploads.removeAt(index);
+                            _dirty = true;
+                          });
+                        },
+                      ),
                       const SizedBox(height: 14),
                       Form(
                         key: _formKey,
@@ -530,7 +572,7 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
                         child: OutlinedButton.icon(
                           icon: const Icon(Icons.save_outlined),
                           label: const Text('保存草稿'),
-                          onPressed: () => Navigator.pop(context, _buildResult(draft: true)),
+                          onPressed: _uploads.isEmpty ? null : () => Navigator.pop(context, _buildResult(draft: true)),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -539,6 +581,7 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
                           icon: const Icon(Icons.cloud_upload_outlined),
                           label: const Text('保存并上传'),
                           onPressed: () {
+                            if (_uploads.isEmpty) return;
                             if (!_formKey.currentState!.validate()) return;
                             Navigator.pop(context, _buildResult(draft: false));
                           },
@@ -582,8 +625,9 @@ enum _CloseAction { cancel, discard, draft }
 class _MultiPreviewCard extends StatelessWidget {
   final List<CachedUpload> uploads;
   final VoidCallback onAddTap;
+  final void Function(int index) onRemoveAt;
 
-  const _MultiPreviewCard({required this.uploads, required this.onAddTap});
+  const _MultiPreviewCard({required this.uploads, required this.onAddTap, required this.onRemoveAt});
 
   @override
   Widget build(BuildContext context) {
@@ -627,16 +671,37 @@ class _MultiPreviewCard extends StatelessWidget {
             final isImage = ext.endsWith('.png') || ext.endsWith('.jpg') || ext.endsWith('.jpeg') || u.source != UploadSource.file;
             return ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: 130,
-                color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                child: isImage && u.path.isNotEmpty
-                    ? Image.file(
-                        File(u.path),
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined),
-                      )
-                    : const Icon(Icons.insert_drive_file_outlined, size: 40),
+              child: Stack(
+                children: [
+                  Container(
+                    width: 130,
+                    color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                    child: isImage && u.path.isNotEmpty
+                        ? Image.file(
+                            File(u.path),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined),
+                          )
+                        : const Icon(Icons.insert_drive_file_outlined, size: 40),
+                  ),
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: InkWell(
+                      onTap: () => onRemoveAt(i),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.close, size: 14, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             );
           },
