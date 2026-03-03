@@ -31,6 +31,10 @@ class _LibraryPageState extends State<LibraryPage> {
         return Colors.deepOrange;
       case 'red':
         return Colors.redAccent;
+      case 'green':
+        return Colors.green;
+      case 'purple':
+        return Colors.purple;
       default:
         return Theme.of(context).colorScheme.primary;
     }
@@ -123,8 +127,13 @@ class _LibraryPageState extends State<LibraryPage> {
                         child: InkWell(
                           onTap: () => showModalBottomSheet(
                             context: context,
+                            isScrollControlled: true,
                             showDragHandle: true,
-                            builder: (_) => _ManualDetailSheet(item: item),
+                            useSafeArea: true,
+                            builder: (_) => FractionallySizedBox(
+                              heightFactor: 0.74,
+                              child: _ManualDetailSheet(item: item),
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -134,7 +143,13 @@ class _LibraryPageState extends State<LibraryPage> {
                                 color: _coverColor(item.coverGradient, context),
                                 alignment: Alignment.bottomLeft,
                                 padding: const EdgeInsets.all(10),
-                                child: Text(item.model, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                child: Text(
+                                  item.model,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
                               Padding(
                                 padding: const EdgeInsets.all(10),
@@ -148,7 +163,10 @@ class _LibraryPageState extends State<LibraryPage> {
                                     Wrap(
                                       spacing: 6,
                                       runSpacing: 6,
-                                      children: item.tags.take(2).map((t) => Chip(label: Text(t.name), visualDensity: VisualDensity.compact)).toList(),
+                                      children: item.tags
+                                          .take(2)
+                                          .map((t) => Chip(label: Text(t.name), visualDensity: VisualDensity.compact))
+                                          .toList(),
                                     ),
                                   ],
                                 ),
@@ -175,19 +193,59 @@ class _ManualDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(item.title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          Text('${item.brand} · ${item.model} · ${item.room}'),
-          const SizedBox(height: 12),
-          FilledButton.icon(onPressed: () {}, icon: const Icon(Icons.menu_book_outlined), label: const Text('打开说明书')),
-        ],
-      ),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        Container(
+          height: 180,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          alignment: Alignment.bottomLeft,
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            item.model,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(item.title, style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 8),
+        Text('${item.brand} · ${item.model} · ${item.room}'),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: item.tags.map((t) => Chip(label: Text(t.name))).toList(),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          elevation: 0,
+          child: ListTile(
+            leading: const Icon(Icons.event_available_outlined),
+            title: const Text('最近更新时间'),
+            subtitle: Text(item.updatedAt.toString().split(' ').first),
+          ),
+        ),
+        Card(
+          elevation: 0,
+          child: ListTile(
+            leading: const Icon(Icons.verified_outlined),
+            title: const Text('保修状态'),
+            subtitle: Text(item.underWarranty ? '保修中' : '已过保'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed: () {},
+          icon: const Icon(Icons.menu_book_outlined),
+          label: const Text('打开说明书'),
+        ),
+      ],
     );
   }
 }
