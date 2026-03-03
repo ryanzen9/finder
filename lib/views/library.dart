@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:finder/api/finder_api.dart';
 import 'package:finder/models/manual.dart';
 import 'package:flutter/material.dart';
@@ -15,10 +17,7 @@ class _LibraryPageState extends State<LibraryPage> {
   String? _selectedTag;
 
   Future<List<ManualItem>> _load() {
-    return widget.api.getLibrary(
-      keyword: _searchCtrl.text,
-      tag: _selectedTag,
-    );
+    return widget.api.getLibrary(keyword: _searchCtrl.text, tag: _selectedTag);
   }
 
   Color _coverColor(String key, BuildContext context) {
@@ -52,123 +51,62 @@ class _LibraryPageState extends State<LibraryPage> {
 
     return Scaffold(
       body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Finder', style: Theme.of(context).textTheme.headlineMedium),
-                        Text('你的说明书书架', style: Theme.of(context).textTheme.bodyMedium),
-                      ],
-                    ),
+        child: FutureBuilder<List<ManualItem>>(
+          future: _load(),
+          builder: (context, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final list = snap.data ?? [];
+            return CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: Text('Finder', style: Theme.of(context).textTheme.headlineMedium),
                   ),
-                  const CircleAvatar(child: Text('林')),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: SearchBar(
-                controller: _searchCtrl,
-                hintText: '搜索说明书、品牌或型号',
-                leading: const Icon(Icons.search),
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-            SizedBox(
-              height: 52,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                children: tags.map((e) {
-                  final selected = _selectedTag == e.$1;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      label: Text(e.$2),
-                      selected: selected,
-                      onSelected: (v) => setState(() => _selectedTag = v ? e.$1 : null),
-                      showCheckmark: false,
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-            Expanded(
-              child: FutureBuilder<List<ManualItem>>(
-                future: _load(),
-                builder: (context, snap) {
-                  if (snap.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final list = snap.data ?? [];
-                  if (list.isEmpty) {
-                    return const Center(child: Text('暂无数据'));
-                  }
-                  return GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: .82,
-                    ),
-                    itemCount: list.length,
-                    itemBuilder: (context, i) {
-                      final item = list[i];
-                      return Card(
-                        elevation: 0,
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: () => showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            showDragHandle: true,
-                            useSafeArea: true,
-                            builder: (_) => FractionallySizedBox(
-                              heightFactor: 0.74,
-                              child: _ManualDetailSheet(item: item),
-                            ),
+                ),
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _SearchHeaderDelegate(
+                    minExtentValue: 62,
+                    maxExtentValue: 92,
+                    childBuilder: (progress) {
+                      final avatarOpacity = 1 - progress;
+                      final verticalPad = lerpDouble(14, 8, progress) ?? 10;
+                      return Padding(
+                        padding: EdgeInsets.fromLTRB(16, verticalPad, 16, 8),
+                        child: Container(
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(24),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              Container(
-                                height: 90,
-                                color: _coverColor(item.coverGradient, context),
-                                alignment: Alignment.bottomLeft,
-                                padding: const EdgeInsets.all(10),
-                                child: Text(
-                                  item.model,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
+                              const SizedBox(width: 12),
+                              Icon(Icons.search, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextField(
+                                  controller: _searchCtrl,
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    hintText: '搜索说明书、品牌或型号',
+                                    isCollapsed: true,
                                   ),
                                 ),
                               ),
-                              Padding(
-                                padding: const EdgeInsets.all(10),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                                    const SizedBox(height: 4),
-                                    Text(item.room, style: Theme.of(context).textTheme.bodySmall),
-                                    const SizedBox(height: 8),
-                                    Wrap(
-                                      spacing: 6,
-                                      runSpacing: 6,
-                                      children: item.tags
-                                          .take(2)
-                                          .map((t) => Chip(label: Text(t.name), visualDensity: VisualDensity.compact))
-                                          .toList(),
-                                    ),
-                                  ],
+                              IgnorePointer(
+                                ignoring: progress > 0.7,
+                                child: AnimatedOpacity(
+                                  opacity: avatarOpacity.clamp(0, 1),
+                                  duration: const Duration(milliseconds: 120),
+                                  child: const Padding(
+                                    padding: EdgeInsets.only(right: 6),
+                                    child: CircleAvatar(radius: 16, child: Text('林')),
+                                  ),
                                 ),
                               ),
                             ],
@@ -176,14 +114,130 @@ class _LibraryPageState extends State<LibraryPage> {
                         ),
                       );
                     },
-                  );
-                },
-              ),
-            ),
-          ],
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 52,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      children: tags.map((e) {
+                        final selected = _selectedTag == e.$1;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FilterChip(
+                            label: Text(e.$2),
+                            selected: selected,
+                            onSelected: (v) => setState(() => _selectedTag = v ? e.$1 : null),
+                            showCheckmark: false,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                if (list.isEmpty)
+                  const SliverFillRemaining(child: Center(child: Text('暂无数据')))
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    sliver: SliverGrid(
+                      delegate: SliverChildBuilderDelegate((context, i) {
+                        final item = list[i];
+                        return Card(
+                          elevation: 0,
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: () => showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              showDragHandle: true,
+                              useSafeArea: true,
+                              builder: (_) => FractionallySizedBox(
+                                heightFactor: 0.74,
+                                child: _ManualDetailSheet(item: item),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  height: 90,
+                                  color: _coverColor(item.coverGradient, context),
+                                  alignment: Alignment.bottomLeft,
+                                  padding: const EdgeInsets.all(10),
+                                  child: Text(item.model, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(10),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                                      const SizedBox(height: 4),
+                                      Text(item.room, style: Theme.of(context).textTheme.bodySmall),
+                                      const SizedBox(height: 8),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: item.tags.take(2).map((t) => Chip(label: Text(t.name), visualDensity: VisualDensity.compact)).toList(),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }, childCount: list.length),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childAspectRatio: .82,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
+  }
+}
+
+class _SearchHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final double minExtentValue;
+  final double maxExtentValue;
+  final Widget Function(double progress) childBuilder;
+
+  _SearchHeaderDelegate({
+    required this.minExtentValue,
+    required this.maxExtentValue,
+    required this.childBuilder,
+  });
+
+  @override
+  double get minExtent => minExtentValue;
+
+  @override
+  double get maxExtent => maxExtentValue;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final progress = (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0);
+    return Container(
+      color: Theme.of(context).colorScheme.surface,
+      child: childBuilder(progress),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _SearchHeaderDelegate oldDelegate) {
+    return oldDelegate.minExtentValue != minExtentValue ||
+        oldDelegate.maxExtentValue != maxExtentValue;
   }
 }
 
