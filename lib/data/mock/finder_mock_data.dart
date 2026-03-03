@@ -10,7 +10,7 @@ class FinderMockData {
     'warranty': ManualTag(id: 'warranty', name: '保修中'),
   };
 
-  static const manuals = <ManualItem>[
+  static final manuals = <ManualItem>[
     ManualItem(
       id: 'm-001',
       title: '索尼 Bravia XR 电视',
