@@ -15,7 +15,14 @@ import 'package:finder/views/settings.dart';
 import 'package:flutter/material.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
+
+  const MainScreen({
+    super.key,
+    required this.themeMode,
+    required this.onThemeModeChanged,
+  });
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -33,9 +40,7 @@ class _MainScreenState extends State<MainScreen> {
 
   final List<CachedUpload> _cachedUploads = [];
   UserProfile? _profile;
-  bool _cacheReady = false;
 
-  int get _draftCount => _cachedUploads.where((e) => e.isDraft).length;
 
   @override
   void initState() {
@@ -51,7 +56,6 @@ class _MainScreenState extends State<MainScreen> {
       _cachedUploads
         ..clear()
         ..addAll(restored);
-      _cacheReady = true;
     });
   }
 
@@ -200,8 +204,8 @@ class _MainScreenState extends State<MainScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      isDismissible: false,
-      enableDrag: false,
+      isDismissible: true,
+      enableDrag: true,
       showDragHandle: true,
       builder: (_) => _UploadFormSheet(
         initials: initials,
@@ -215,14 +219,7 @@ class _MainScreenState extends State<MainScreen> {
 
     if (result == null || !mounted) return;
 
-    if (result.discarded) {
-      if (replacedDraftIds.isNotEmpty) {
-        _cachedUploads.removeWhere((e) => replacedDraftIds.contains(e.id));
-        await _cacheService.save(_cachedUploads);
-        if (mounted) setState(() {});
-      }
-      return;
-    }
+    if (result.discarded) return;
 
     if (replacedDraftIds.isNotEmpty) {
       _cachedUploads.removeWhere((e) => replacedDraftIds.contains(e.id));
@@ -235,7 +232,7 @@ class _MainScreenState extends State<MainScreen> {
             category: result.category,
             nickname: result.nickname,
             description: result.description,
-            isDraft: result.isDraft,
+            isDraft: false,
             syncStatus: SyncStatus.pending,
           ),
         )
@@ -243,14 +240,6 @@ class _MainScreenState extends State<MainScreen> {
 
     setState(() => _cachedUploads.insertAll(0, prepared));
     await _cacheService.save(_cachedUploads);
-
-    if (result.isDraft) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已保存草稿（${prepared.length}）')),
-      );
-      return;
-    }
 
     int success = 0;
     for (final item in prepared) {
@@ -289,10 +278,10 @@ class _MainScreenState extends State<MainScreen> {
     final pages = [
       LibraryPage(api: _api, cachedUploads: _cachedUploads, profile: _profile, onAvatarTap: _onAvatarTap),
       ExplorePage(api: _api),
-      const SettingsPage(),
+      SettingsPage(themeMode: widget.themeMode, onThemeModeChanged: widget.onThemeModeChanged),
     ];
 
-    final scanLabel = !_cacheReady ? 'Scan (...)' : (_draftCount == 0 ? 'Scan' : 'Scan ($_draftCount)');
+    const scanLabel = 'Scan';
 
     return Scaffold(
       body: IndexedStack(index: _currentIndex, children: pages),
@@ -323,7 +312,6 @@ class _UploadSubmitResult {
   final String category;
   final String description;
   final String nickname;
-  final bool isDraft;
   final bool discarded;
 
   const _UploadSubmitResult({
@@ -332,7 +320,6 @@ class _UploadSubmitResult {
     required this.category,
     required this.description,
     required this.nickname,
-    required this.isDraft,
     this.discarded = false,
   });
 }
@@ -447,11 +434,11 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('检测到未保存内容'),
-        content: const Text('你可以放弃修改，或先保存草稿。'),
+        content: const Text('你有未保存内容，是否放弃修改？'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, _CloseAction.cancel), child: const Text('继续编辑')),
           TextButton(onPressed: () => Navigator.pop(ctx, _CloseAction.discard), child: const Text('放弃修改')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, _CloseAction.draft), child: const Text('保存草稿')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, _CloseAction.cancel), child: const Text('取消')),
         ],
       ),
     );
@@ -470,22 +457,18 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
         category: '',
         description: '',
         nickname: '',
-        isDraft: false,
         discarded: true,
       ));
-    } else if (act == _CloseAction.draft) {
-      navigator.pop(_buildResult(draft: true));
     }
   }
 
-  _UploadSubmitResult _buildResult({required bool draft}) {
+  _UploadSubmitResult _buildResult() {
     return _UploadSubmitResult(
       uploads: _uploads,
       brand: _brandCtrl.text.trim(),
       category: _categoryCtrl.text.trim(),
       nickname: _nickCtrl.text.trim(),
       description: _descCtrl.text.trim(),
-      isDraft: draft,
     );
   }
 
@@ -570,9 +553,9 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          icon: const Icon(Icons.save_outlined),
-                          label: const Text('保存草稿'),
-                          onPressed: _uploads.isEmpty ? null : () => Navigator.pop(context, _buildResult(draft: true)),
+                          icon: const Icon(Icons.close),
+                          label: const Text('取消'),
+                          onPressed: _requestClose,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -583,7 +566,7 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
                           onPressed: () {
                             if (_uploads.isEmpty) return;
                             if (!_formKey.currentState!.validate()) return;
-                            Navigator.pop(context, _buildResult(draft: false));
+                            Navigator.pop(context, _buildResult());
                           },
                         ),
                       ),
@@ -620,7 +603,7 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
   }
 }
 
-enum _CloseAction { cancel, discard, draft }
+enum _CloseAction { cancel, discard }
 
 class _MultiPreviewCard extends StatelessWidget {
   final List<CachedUpload> uploads;

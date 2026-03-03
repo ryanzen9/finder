@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
+
+  const SettingsPage({
+    super.key,
+    required this.themeMode,
+    required this.onThemeModeChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -16,18 +23,50 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: 16),
             const _SettingTile(
               icon: Icons.cloud_outlined,
-              title: 'Google Drive',
-              subtitle: '已连接 · 2.4 GB 同步',
-              action: '管理',
+              title: 'Google Drive 同步',
+              subtitle: '未连接',
+              action: '连接',
             ),
             const _SettingTile(
-              icon: Icons.storage_outlined,
-              title: '云端同步',
-              subtitle: '最近同步 · 5 分钟前（API）',
-              action: '查看',
+              icon: Icons.backup_outlined,
+              title: 'iCloud 同步',
+              subtitle: '未连接',
+              action: '连接',
             ),
-            const _SwitchTile(title: '深色模式', subtitle: '手动切换界面风格'),
-            const _SwitchTile(title: '触感反馈', subtitle: '确认操作时轻震动', initial: true),
+            const SizedBox(height: 12),
+            Card(
+              elevation: 0,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('主题样式', style: Theme.of(context).textTheme.titleMedium),
+                    RadioListTile<ThemeMode>(
+                      contentPadding: EdgeInsets.zero,
+                      value: ThemeMode.light,
+                      groupValue: themeMode,
+                      onChanged: (v) => onThemeModeChanged(v ?? ThemeMode.light),
+                      title: const Text('浅色'),
+                    ),
+                    RadioListTile<ThemeMode>(
+                      contentPadding: EdgeInsets.zero,
+                      value: ThemeMode.dark,
+                      groupValue: themeMode,
+                      onChanged: (v) => onThemeModeChanged(v ?? ThemeMode.dark),
+                      title: const Text('深色'),
+                    ),
+                    RadioListTile<ThemeMode>(
+                      contentPadding: EdgeInsets.zero,
+                      value: ThemeMode.system,
+                      groupValue: themeMode,
+                      onChanged: (v) => onThemeModeChanged(v ?? ThemeMode.system),
+                      title: const Text('跟随系统'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -52,34 +91,6 @@ class _SettingTile extends StatelessWidget {
         title: Text(title),
         subtitle: Text(subtitle),
         trailing: FilledButton.tonal(onPressed: () {}, child: Text(action)),
-      ),
-    );
-  }
-}
-
-class _SwitchTile extends StatefulWidget {
-  final String title;
-  final String subtitle;
-  final bool initial;
-  const _SwitchTile({required this.title, required this.subtitle, this.initial = false});
-
-  @override
-  State<_SwitchTile> createState() => _SwitchTileState();
-}
-
-class _SwitchTileState extends State<_SwitchTile> {
-  late bool v = widget.initial;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 10),
-      child: SwitchListTile(
-        value: v,
-        onChanged: (n) => setState(() => v = n),
-        title: Text(widget.title),
-        subtitle: Text(widget.subtitle),
       ),
     );
   }
