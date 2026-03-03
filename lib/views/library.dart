@@ -1,173 +1,191 @@
-import 'package:finder/api/book.api.dart';
-import 'package:finder/models/book.model.dart';
+import 'package:finder/api/finder_api.dart';
+import 'package:finder/models/manual.dart';
 import 'package:flutter/material.dart';
 
 class LibraryPage extends StatefulWidget {
-  const LibraryPage({super.key});
+  final IFinderApi api;
+  const LibraryPage({super.key, required this.api});
 
   @override
   State<LibraryPage> createState() => _LibraryPageState();
 }
 
 class _LibraryPageState extends State<LibraryPage> {
-  bool isLoading = false;
-  List books = [];
+  final _searchCtrl = TextEditingController();
+  String? _selectedTag;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchBooks();
-  }
-
-  Future<void> _fetchBooks() async {
-    setState(() => isLoading = true);
-    List<Book> fetchedBooks = await BookApi.list();
-    if (!mounted) return;
-    setState(() {
-      books = fetchedBooks;
-      isLoading = false;
-    });
-  }
-
-  // 辅助方法：构建分类标签
-  Widget _buildCategoryChip(
-    BuildContext context,
-    String label,
-    bool isSelected,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 10.0),
-      child: FilterChip(
-        label: Text(label),
-        selected: isSelected,
-        onSelected: (bool value) {},
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, // 消除垂直热区间距
-        shape: const StadiumBorder(),
-        side: BorderSide.none,
-        showCheckmark: false,
-        labelStyle: TextStyle(
-          fontSize: 12,
-          color: isSelected
-              ? Theme.of(context).colorScheme.onSecondaryContainer
-              : Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-        selectedColor: Theme.of(context).colorScheme.secondaryContainer,
-      ),
+  Future<List<ManualItem>> _load() {
+    return widget.api.getLibrary(
+      keyword: _searchCtrl.text,
+      tag: _selectedTag,
     );
+  }
+
+  Color _coverColor(String key, BuildContext context) {
+    switch (key) {
+      case 'blue':
+        return Colors.lightBlue;
+      case 'indigo':
+        return Colors.indigo;
+      case 'orange':
+        return Colors.deepOrange;
+      case 'red':
+        return Colors.redAccent;
+      default:
+        return Theme.of(context).colorScheme.primary;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final tags = const [
+      ('tv', '影音'),
+      ('kitchen', '厨房'),
+      ('camera', '相机'),
+      ('car', '汽车'),
+      ('warranty', '保修中'),
+    ];
+
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      // 使用 CustomScrollView 替代 NestedScrollView
-      body: CustomScrollView(
-        slivers: <Widget>[
-          // 1. 伸缩标题栏
-          SliverAppBar(
-            expandedHeight: 120.0,
-            pinned: true,
-            elevation: 0,
-            scrolledUnderElevation: 2,
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 16.0),
-                child: CircleAvatar(
-                  backgroundColor: Theme.of(
-                    context,
-                  ).colorScheme.surfaceContainerHigh,
-                  child: const Text("林", style: TextStyle(fontSize: 14)),
-                ),
-              ),
-            ],
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsetsDirectional.only(
-                start: 16,
-                bottom: 16,
-              ),
-              centerTitle: false,
-              title: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
                 children: [
-                  Text(
-                    "Finder",
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 20, // 固定缩放后的基础大小
-                    ),
-                  ),
-                  const Text(
-                    "你的说明书书架",
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.normal,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // 2. 分类标签栏
-          SliverToBoxAdapter(
-            child: Container(
-              height: 48, // 调整高度更紧凑
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  _buildCategoryChip(context, "客厅", false),
-                  _buildCategoryChip(context, "保修中", false),
-                  _buildCategoryChip(context, "PDF", false),
-                  _buildCategoryChip(context, "家电", false),
-                  _buildCategoryChip(context, "汽车", false),
-                ],
-              ),
-            ),
-          ),
-
-          // 3. 内容区域
-          isLoading
-              ? const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              : books.isEmpty
-              ? SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
+                  Expanded(
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.book, size: 64, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text(
-                          "书架空空如也",
-                          style: TextStyle(fontSize: 18, color: Colors.grey),
-                        ),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Finder', style: Theme.of(context).textTheme.headlineMedium),
+                        Text('你的说明书书架', style: Theme.of(context).textTheme.bodyMedium),
                       ],
                     ),
                   ),
-                )
-              : SliverList(
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    return ListTile(
-                      leading: Icon(
-                        Icons.book,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      title: Text("Book Item ${books[index].name}"),
-                    );
-                  }, childCount: books.length),
-                ),
+                  const CircleAvatar(child: Text('林')),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SearchBar(
+                controller: _searchCtrl,
+                hintText: '搜索说明书、品牌或型号',
+                leading: const Icon(Icons.search),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            SizedBox(
+              height: 52,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                children: tags.map((e) {
+                  final selected = _selectedTag == e.$1;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilterChip(
+                      label: Text(e.$2),
+                      selected: selected,
+                      onSelected: (v) => setState(() => _selectedTag = v ? e.$1 : null),
+                      showCheckmark: false,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            Expanded(
+              child: FutureBuilder<List<ManualItem>>(
+                future: _load(),
+                builder: (context, snap) {
+                  if (snap.connectionState != ConnectionState.done) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final list = snap.data ?? [];
+                  if (list.isEmpty) {
+                    return const Center(child: Text('暂无数据'));
+                  }
+                  return GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: .82,
+                    ),
+                    itemCount: list.length,
+                    itemBuilder: (context, i) {
+                      final item = list[i];
+                      return Card(
+                        elevation: 0,
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () => showModalBottomSheet(
+                            context: context,
+                            showDragHandle: true,
+                            builder: (_) => _ManualDetailSheet(item: item),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                height: 90,
+                                color: _coverColor(item.coverGradient, context),
+                                alignment: Alignment.bottomLeft,
+                                padding: const EdgeInsets.all(10),
+                                child: Text(item.model, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                                    const SizedBox(height: 4),
+                                    Text(item.room, style: Theme.of(context).textTheme.bodySmall),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: item.tags.take(2).map((t) => Chip(label: Text(t.name), visualDensity: VisualDensity.compact)).toList(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-          // 给底部留出一定空间，防止被 FAB 遮挡
-          const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
+class _ManualDetailSheet extends StatelessWidget {
+  final ManualItem item;
+  const _ManualDetailSheet({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(item.title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Text('${item.brand} · ${item.model} · ${item.room}'),
+          const SizedBox(height: 12),
+          FilledButton.icon(onPressed: () {}, icon: const Icon(Icons.menu_book_outlined), label: const Text('打开说明书')),
         ],
       ),
     );
