@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:finder/api/finder_api.dart';
 import 'package:finder/api/finder_mock_api.dart';
 import 'package:finder/models/upload_asset.dart';
+import 'package:finder/models/user_profile.dart';
+import 'package:finder/services/auth_profile_cache_service.dart';
+import 'package:finder/services/social_auth_service.dart';
 import 'package:finder/services/upload_cache_service.dart';
 import 'package:finder/services/upload_picker_service.dart';
 import 'package:finder/services/upload_sync_service.dart';
@@ -25,7 +28,11 @@ class _MainScreenState extends State<MainScreen> {
   final UploadCacheService _cacheService = UploadCacheService();
   final UploadSyncService _syncService = const UploadSyncService();
 
+  final SocialAuthService _authService = SocialAuthService();
+  final AuthProfileCacheService _authCache = AuthProfileCacheService();
+
   final List<CachedUpload> _cachedUploads = [];
+  UserProfile? _profile;
   bool _cacheReady = false;
 
   int get _draftCount => _cachedUploads.where((e) => e.isDraft).length;
@@ -34,6 +41,7 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _restoreUploadCache();
+    _restoreProfile();
   }
 
   Future<void> _restoreUploadCache() async {
@@ -45,6 +53,82 @@ class _MainScreenState extends State<MainScreen> {
         ..addAll(restored);
       _cacheReady = true;
     });
+  }
+
+  Future<void> _restoreProfile() async {
+    final profile = await _authCache.load();
+    if (!mounted) return;
+    setState(() => _profile = profile);
+  }
+
+  Future<void> _onAvatarTap() async {
+    if (_profile != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已登录：${_profile!.nickname}')),
+      );
+      return;
+    }
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('登录'),
+              subtitle: Text('请选择登录方式'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.g_mobiledata_rounded, size: 32),
+              title: const Text('使用 Google 登录'),
+              subtitle: const Text('将在应用内浏览器完成登录'),
+              onTap: () => Navigator.pop(ctx, 'google'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.apple),
+              title: const Text('使用 Apple 登录'),
+              subtitle: const Text('使用 Apple ID 授权'),
+              onTap: () => Navigator.pop(ctx, 'apple'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (action == null || !mounted) return;
+
+    try {
+      UserProfile? profile;
+      if (action == 'google') {
+        profile = await _authService.signInWithGoogle();
+      } else {
+        profile = await _authService.signInWithApple();
+      }
+
+      if (profile == null || !mounted) return;
+
+      await _authCache.save(profile);
+      setState(() => _profile = profile);
+
+      try {
+        await _authService.syncProfileToBackend(profile);
+      } catch (_) {
+        // 后端暂未接好时忽略，保留本地已登录状态
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('登录成功，欢迎你 ${profile.nickname}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('登录失败：$e')),
+      );
+    }
   }
 
   Future<void> _openScanPicker() async {
@@ -150,7 +234,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      LibraryPage(api: _api, cachedUploads: _cachedUploads),
+      LibraryPage(api: _api, cachedUploads: _cachedUploads, profile: _profile, onAvatarTap: _onAvatarTap),
       ExplorePage(api: _api),
       const SettingsPage(),
     ];
@@ -243,7 +327,7 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
       category: _categoryCtrl.text.trim(),
       nickname: _nickCtrl.text.trim(),
       description: _descCtrl.text.trim(),
-      syncStatus: draft ? SyncStatus.pending : SyncStatus.pending,
+      syncStatus: SyncStatus.pending,
       isDraft: draft,
     );
   }

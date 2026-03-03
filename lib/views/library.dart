@@ -3,13 +3,22 @@ import 'dart:ui';
 import 'package:finder/api/finder_api.dart';
 import 'package:finder/models/manual.dart';
 import 'package:finder/models/upload_asset.dart';
+import 'package:finder/models/user_profile.dart';
 import 'package:flutter/material.dart';
 
 class LibraryPage extends StatefulWidget {
   final IFinderApi api;
   final List<CachedUpload> cachedUploads;
+  final UserProfile? profile;
+  final VoidCallback onAvatarTap;
 
-  const LibraryPage({super.key, required this.api, required this.cachedUploads});
+  const LibraryPage({
+    super.key,
+    required this.api,
+    required this.cachedUploads,
+    required this.profile,
+    required this.onAvatarTap,
+  });
 
   @override
   State<LibraryPage> createState() => _LibraryPageState();
@@ -266,9 +275,19 @@ class _LibraryPageState extends State<LibraryPage> {
                                 ),
                                 Opacity(
                                   opacity: avatarOpacity,
-                                  child: const Padding(
-                                    padding: EdgeInsets.only(right: 6),
-                                    child: CircleAvatar(radius: 16, child: Text('林')),
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(18),
+                                      onTap: widget.onAvatarTap,
+                                      child: CircleAvatar(
+                                        radius: 16,
+                                        backgroundImage: widget.profile?.avatarUrl != null ? NetworkImage(widget.profile!.avatarUrl!) : null,
+                                        child: widget.profile?.avatarUrl == null
+                                            ? Text((widget.profile?.nickname.isNotEmpty == true ? widget.profile!.nickname[0] : '林'))
+                                            : null,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],
