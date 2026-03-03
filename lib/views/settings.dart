@@ -22,8 +22,8 @@ class SettingsPage extends StatelessWidget {
             ),
             const _SettingTile(
               icon: Icons.storage_outlined,
-              title: 'Supabase',
-              subtitle: '最近同步 · 5 分钟前',
+              title: '云端同步',
+              subtitle: '最近同步 · 5 分钟前（API）',
               action: '查看',
             ),
             const _SwitchTile(title: '深色模式', subtitle: '手动切换界面风格'),

@@ -32,6 +32,8 @@ class App extends StatelessWidget {
 
       // 主题
       theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.system,
 
       // 底部导航栏
       // home: BottomMenuBarPage(),
