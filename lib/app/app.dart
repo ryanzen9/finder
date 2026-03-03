@@ -23,6 +23,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+
   final IFinderApi _api = const FinderMockApi();
   final UploadPickerService _uploadService = UploadPickerService();
   final UploadCacheService _cacheService = UploadCacheService();
@@ -124,7 +125,23 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  Future<void> _openScanPicker() async {
+  Future<void> _onScanTap() async {
+    // 如果存在草稿，直接恢复最近草稿表单
+    final drafts = _cachedUploads.where((e) => e.isDraft).toList();
+    if (drafts.isNotEmpty) {
+      drafts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final first = drafts.first;
+      await _openUploadFormSheet(
+        initials: drafts,
+        replacedDraftIds: drafts.map((e) => e.id).toList(),
+        initialBrand: first.brand,
+        initialCategory: first.category,
+        initialNickname: first.nickname,
+        initialDescription: first.description,
+      );
+      return;
+    }
+
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -154,33 +171,53 @@ class _MainScreenState extends State<MainScreen> {
     );
 
     if (action == null) return;
-
-    List<CachedUpload> picked = [];
-    if (action == 'camera') {
-      final one = await _uploadService.pickFromCamera();
-      if (one != null) picked = [one];
-    } else if (action == 'gallery') {
-      picked = await _uploadService.pickMultiFromGallery();
-    } else {
-      picked = await _uploadService.pickFromFiles();
-    }
-
+    final picked = await _pickByAction(action);
     if (!mounted || picked.isEmpty) return;
-    await _openUploadFormSheet(picked);
+
+    await _openUploadFormSheet(initials: picked, replacedDraftIds: const []);
   }
 
-  Future<void> _openUploadFormSheet(List<CachedUpload> uploads) async {
+  Future<List<CachedUpload>> _pickByAction(String action) async {
+    if (action == 'camera') {
+      final one = await _uploadService.pickFromCamera();
+      return one == null ? [] : [one];
+    }
+    if (action == 'gallery') {
+      return _uploadService.pickMultiFromGallery();
+    }
+    return _uploadService.pickFromFiles();
+  }
+
+  Future<void> _openUploadFormSheet({
+    required List<CachedUpload> initials,
+    required List<String> replacedDraftIds,
+    String? initialBrand,
+    String? initialCategory,
+    String? initialNickname,
+    String? initialDescription,
+  }) async {
     final result = await showModalBottomSheet<_UploadSubmitResult>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      builder: (_) => _UploadFormSheet(initials: uploads),
+      builder: (_) => _UploadFormSheet(
+        initials: initials,
+        picker: _uploadService,
+        initialBrand: initialBrand,
+        initialCategory: initialCategory,
+        initialNickname: initialNickname,
+        initialDescription: initialDescription,
+      ),
     );
 
     if (result == null || !mounted) return;
 
-    final prepared = uploads
+    if (replacedDraftIds.isNotEmpty) {
+      _cachedUploads.removeWhere((e) => replacedDraftIds.contains(e.id));
+    }
+
+    final prepared = result.uploads
         .map(
           (u) => u.copyWith(
             brand: result.brand,
@@ -250,7 +287,7 @@ class _MainScreenState extends State<MainScreen> {
       body: IndexedStack(index: _currentIndex, children: pages),
       floatingActionButton: _currentIndex == 0
           ? FloatingActionButton.extended(
-              onPressed: _openScanPicker,
+              onPressed: _onScanTap,
               label: Text(scanLabel),
               icon: const Icon(Icons.camera_alt_outlined),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -270,6 +307,7 @@ class _MainScreenState extends State<MainScreen> {
 }
 
 class _UploadSubmitResult {
+  final List<CachedUpload> uploads;
   final String brand;
   final String category;
   final String description;
@@ -277,6 +315,7 @@ class _UploadSubmitResult {
   final bool isDraft;
 
   const _UploadSubmitResult({
+    required this.uploads,
     required this.brand,
     required this.category,
     required this.description,
@@ -287,7 +326,20 @@ class _UploadSubmitResult {
 
 class _UploadFormSheet extends StatefulWidget {
   final List<CachedUpload> initials;
-  const _UploadFormSheet({required this.initials});
+  final UploadPickerService picker;
+  final String? initialBrand;
+  final String? initialCategory;
+  final String? initialDescription;
+  final String? initialNickname;
+
+  const _UploadFormSheet({
+    required this.initials,
+    required this.picker,
+    this.initialBrand,
+    this.initialCategory,
+    this.initialDescription,
+    this.initialNickname,
+  });
 
   @override
   State<_UploadFormSheet> createState() => _UploadFormSheetState();
@@ -299,15 +351,19 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
   late final TextEditingController _categoryCtrl;
   late final TextEditingController _descCtrl;
   late final TextEditingController _nickCtrl;
+
+  late List<CachedUpload> _uploads;
   bool _dirty = false;
 
   @override
   void initState() {
     super.initState();
-    _brandCtrl = TextEditingController();
-    _categoryCtrl = TextEditingController();
-    _descCtrl = TextEditingController();
-    _nickCtrl = TextEditingController();
+    _uploads = List<CachedUpload>.from(widget.initials);
+    _brandCtrl = TextEditingController(text: widget.initialBrand ?? '');
+    _categoryCtrl = TextEditingController(text: widget.initialCategory ?? '');
+    _descCtrl = TextEditingController(text: widget.initialDescription ?? '');
+    _nickCtrl = TextEditingController(text: widget.initialNickname ?? '');
+
     for (final c in [_brandCtrl, _categoryCtrl, _descCtrl, _nickCtrl]) {
       c.addListener(() {
         if (!_dirty && mounted) setState(() => _dirty = true);
@@ -322,6 +378,54 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
     _descCtrl.dispose();
     _nickCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickMore() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('继续拍照'),
+              onTap: () => Navigator.pop(ctx, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('继续从相册添加'),
+              onTap: () => Navigator.pop(ctx, 'gallery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.attach_file_outlined),
+              title: const Text('继续从文件添加'),
+              onTap: () => Navigator.pop(ctx, 'file'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (action == null) return;
+
+    List<CachedUpload> more = [];
+    if (action == 'camera') {
+      final one = await widget.picker.pickFromCamera();
+      if (one != null) more = [one];
+    } else if (action == 'gallery') {
+      more = await widget.picker.pickMultiFromGallery();
+    } else {
+      more = await widget.picker.pickFromFiles();
+    }
+
+    if (more.isEmpty) return;
+    setState(() {
+      _uploads.addAll(more);
+      _dirty = true;
+    });
   }
 
   Future<_CloseAction> _confirmCloseAction() async {
@@ -343,6 +447,7 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
 
   _UploadSubmitResult _buildResult({required bool draft}) {
     return _UploadSubmitResult(
+      uploads: _uploads,
       brand: _brandCtrl.text.trim(),
       category: _categoryCtrl.text.trim(),
       nickname: _nickCtrl.text.trim(),
@@ -366,14 +471,13 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
         }
       },
       child: DraggableScrollableSheet(
-        initialChildSize: 0.92,
-        minChildSize: 0.58,
-        maxChildSize: 0.96,
+        initialChildSize: 0.94,
+        minChildSize: 0.62,
+        maxChildSize: 0.98,
         expand: false,
         builder: (context, controller) {
-          final bg = Theme.of(context).colorScheme.surfaceContainerLowest;
           return Material(
-            color: bg,
+            color: Theme.of(context).colorScheme.surfaceContainerLowest,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             clipBehavior: Clip.antiAlias,
             child: Column(
@@ -385,9 +489,9 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
                     children: [
                       Text('上传资料', style: Theme.of(context).textTheme.headlineSmall),
                       const SizedBox(height: 4),
-                      Text('共 ${widget.initials.length} 个文件', style: Theme.of(context).textTheme.bodySmall),
+                      Text('共 ${_uploads.length} 个文件（可继续添加）', style: Theme.of(context).textTheme.bodySmall),
                       const SizedBox(height: 10),
-                      _MultiPreviewCard(uploads: widget.initials),
+                      _MultiPreviewCard(uploads: _uploads, onAddTap: _pickMore),
                       const SizedBox(height: 14),
                       Form(
                         key: _formKey,
@@ -477,7 +581,9 @@ enum _CloseAction { cancel, discard, draft }
 
 class _MultiPreviewCard extends StatelessWidget {
   final List<CachedUpload> uploads;
-  const _MultiPreviewCard({required this.uploads});
+  final VoidCallback onAddTap;
+
+  const _MultiPreviewCard({required this.uploads, required this.onAddTap});
 
   @override
   Widget build(BuildContext context) {
@@ -488,12 +594,34 @@ class _MultiPreviewCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: SizedBox(
-        height: 156,
+        height: 164,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
-          itemCount: uploads.length,
+          itemCount: uploads.length + 1,
           separatorBuilder: (_, __) => const SizedBox(width: 8),
           itemBuilder: (context, i) {
+            if (i == uploads.length) {
+              return InkWell(
+                onTap: onAddTap,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 130,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_photo_alternate_outlined, size: 28),
+                      SizedBox(height: 8),
+                      Text('继续上传'),
+                    ],
+                  ),
+                ),
+              );
+            }
+
             final u = uploads[i];
             final ext = u.name.toLowerCase();
             final isImage = ext.endsWith('.png') || ext.endsWith('.jpg') || ext.endsWith('.jpeg') || u.source != UploadSource.file;

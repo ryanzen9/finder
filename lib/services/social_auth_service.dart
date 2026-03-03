@@ -10,7 +10,19 @@ class SocialAuthService {
     scopes: const ['email', 'profile'],
   );
 
+  bool _isIosSimulator() {
+    if (!Platform.isIOS) return false;
+    final env = Platform.environment;
+    return env.containsKey('SIMULATOR_DEVICE_NAME') ||
+        env.containsKey('IPHONE_SIMULATOR_ROOT') ||
+        env.containsKey('SIMULATOR_ROOT');
+  }
+
+
   Future<UserProfile?> signInWithGoogle() async {
+    if (_isIosSimulator()) {
+      throw Exception('iOS 模拟器不支持完整 Google 登录，请在真机测试或先配置 iOS Client ID / URL Scheme');
+    }
     final account = await _googleSignIn.signIn();
     if (account == null) return null;
 
