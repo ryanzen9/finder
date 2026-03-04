@@ -13,6 +13,7 @@ class LibraryPage extends StatefulWidget {
   final VoidCallback onAvatarTap;
   final Future<void> Function(String uploadId) onRemoveUpload;
   final Future<void> Function(String uploadId, {required String title, required String brand, required String category, required String description}) onUpdateUpload;
+  final List<ManualItem> extraManuals;
 
   const LibraryPage({
     super.key,
@@ -22,6 +23,7 @@ class LibraryPage extends StatefulWidget {
     required this.onAvatarTap,
     required this.onRemoveUpload,
     required this.onUpdateUpload,
+    required this.extraManuals,
   });
 
   @override
@@ -80,7 +82,7 @@ class _LibraryPageState extends State<LibraryPage> {
             ))
         .toList();
 
-    final merged = [...fromUploads, ..._all];
+    final merged = [...widget.extraManuals, ...fromUploads, ..._all];
     return merged.where((e) {
       final matchQ = q.isEmpty ||
           e.title.toLowerCase().contains(q) ||

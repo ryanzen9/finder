@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:finder/api/finder_api.dart';
 import 'package:finder/api/finder_mock_api.dart';
+import 'package:finder/models/manual.dart';
 import 'package:finder/models/upload_asset.dart';
 import 'package:finder/models/user_profile.dart';
 import 'package:finder/services/auth_profile_cache_service.dart';
+import 'package:finder/services/manual_shelf_cache_service.dart';
 import 'package:finder/services/social_auth_service.dart';
 import 'package:finder/services/upload_cache_service.dart';
 import 'package:finder/services/upload_picker_service.dart';
@@ -37,8 +39,10 @@ class _MainScreenState extends State<MainScreen> {
   final UploadSyncService _syncService = const UploadSyncService();
   final SocialAuthService _authService = SocialAuthService();
   final AuthProfileCacheService _authCache = AuthProfileCacheService();
+  final ManualShelfCacheService _manualCache = ManualShelfCacheService();
 
   final List<CachedUpload> _cachedUploads = [];
+  final List<ManualItem> _localManuals = [];
   UserProfile? _profile;
 
 
@@ -47,6 +51,7 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     _restoreUploadCache();
     _restoreProfile();
+    _restoreLocalManuals();
   }
 
   Future<void> _restoreUploadCache() async {
@@ -59,6 +64,26 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
+
+
+  Future<void> _restoreLocalManuals() async {
+    final restored = await _manualCache.load();
+    if (!mounted) return;
+    setState(() {
+      _localManuals
+        ..clear()
+        ..addAll(restored);
+    });
+  }
+
+  Future<void> _addManualToShelf(ManualItem item) async {
+    final exists = _localManuals.any((e) => e.id == item.id);
+    if (exists) return;
+    _localManuals.insert(0, item);
+    await _manualCache.save(_localManuals);
+    if (!mounted) return;
+    setState(() {});
+  }
 
   Future<void> _removeUploadById(String uploadId) async {
     _cachedUploads.removeWhere((e) => e.id == uploadId || 'up-${e.id}' == uploadId);
@@ -307,8 +332,14 @@ class _MainScreenState extends State<MainScreen> {
         onAvatarTap: _onAvatarTap,
         onRemoveUpload: _removeUploadById,
         onUpdateUpload: _updateUploadMeta,
+        extraManuals: _localManuals,
       ),
-      ExplorePage(api: _api),
+      ExplorePage(
+        api: _api,
+        cachedUploads: _cachedUploads,
+        localManuals: _localManuals,
+        onAddManualToShelf: _addManualToShelf,
+      ),
       SettingsPage(themeMode: widget.themeMode, onThemeModeChanged: widget.onThemeModeChanged),
     ];
 
