@@ -1,24 +1,37 @@
 import 'dart:convert';
 
+import 'package:finder/core/database/database_helper.dart';
 import 'package:finder/models/upload_asset.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class UploadCacheService {
-  static const _key = 'finder.cached_uploads.v1';
-
   Future<List<CachedUpload>> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
-    if (raw == null || raw.isEmpty) return [];
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.query(
+      DatabaseHelper.uploadCacheTable,
+      orderBy: 'updated_at DESC',
+    );
 
-    final List<dynamic> arr = jsonDecode(raw) as List<dynamic>;
-    return arr.map((e) => _fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    return rows
+        .map((r) => _fromJson(jsonDecode((r['payload'] ?? '{}').toString()) as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> save(List<CachedUpload> items) async {
-    final prefs = await SharedPreferences.getInstance();
-    final encoded = jsonEncode(items.map(_toJson).toList());
-    await prefs.setString(_key, encoded);
+    final db = await DatabaseHelper.instance.database;
+    final batch = db.batch();
+
+    batch.delete(DatabaseHelper.uploadCacheTable);
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final e in items) {
+      batch.insert(DatabaseHelper.uploadCacheTable, {
+        'id': e.id,
+        'payload': jsonEncode(_toJson(e)),
+        'updated_at': now,
+      });
+    }
+
+    await batch.commit(noResult: true);
   }
 
   Map<String, dynamic> _toJson(CachedUpload e) {

@@ -2,7 +2,7 @@ import 'package:finder/api/finder_api.dart';
 import 'package:finder/models/help_request.dart';
 import 'package:finder/models/manual.dart';
 import 'package:finder/models/upload_asset.dart';
-import 'package:finder/utils/net/api.dart';
+import 'package:finder/presentation/viewmodels/explore_view_model.dart';
 import 'package:flutter/material.dart';
 
 class ExplorePage extends StatefulWidget {
@@ -25,6 +25,7 @@ class ExplorePage extends StatefulWidget {
 
 class _ExplorePageState extends State<ExplorePage> {
   final _ctrl = TextEditingController();
+  final ExploreViewModel _vm = ExploreViewModel();
 
   @override
   void dispose() {
@@ -68,28 +69,22 @@ class _ExplorePageState extends State<ExplorePage> {
 
     if (picked == null || !mounted) return;
 
-    // 预留接口
-    try {
-      await Api.post('/help/respond', data: {
-        'requestId': request.id,
-        'manualId': picked.id,
-      });
-    } catch (_) {}
+    final ok = await _vm.respondHelp(requestId: request.id, manualId: picked.id);
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已响应：${picked.title}')),
+      SnackBar(content: Text(ok ? '已响应：${picked.title}' : '响应失败，请稍后重试')),
     );
   }
 
   Future<void> _addToShelf(ManualItem item) async {
-    try {
-      await Api.post('/community/add', data: {'manualId': item.id});
-    } catch (_) {}
-    await widget.onAddManualToShelf(item);
+    final ok = await _vm.addCommunityManual(manualId: item.id);
+    if (ok) {
+      await widget.onAddManualToShelf(item);
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已加入说明书架：${item.title}')),
+      SnackBar(content: Text(ok ? '已加入说明书架：${item.title}' : '添加失败，请稍后重试')),
     );
   }
 

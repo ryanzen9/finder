@@ -2,8 +2,8 @@ import 'package:finder/app/app.dart';
 import 'package:finder/app/theme.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:finder/services/app_settings_storage_service.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   // 沉浸式
@@ -27,8 +27,7 @@ class App extends StatefulWidget {
 
 class _AppState extends State<App> {
   ThemeMode _themeMode = ThemeMode.system;
-
-  static const _themeKey = 'finder.themeMode.v1';
+  final AppSettingsStorageService _settings = AppSettingsStorageService();
 
   @override
   void initState() {
@@ -37,21 +36,14 @@ class _AppState extends State<App> {
   }
 
   Future<void> _restoreThemeMode() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_themeKey);
-    if (!mounted || raw == null) return;
-    final mode = switch (raw) {
-      'light' => ThemeMode.light,
-      'dark' => ThemeMode.dark,
-      _ => ThemeMode.system,
-    };
+    final mode = await _settings.loadThemeMode();
+    if (!mounted) return;
     setState(() => _themeMode = mode);
   }
 
   Future<void> _setThemeMode(ThemeMode mode) async {
     setState(() => _themeMode = mode);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_themeKey, mode.name);
+    await _settings.saveThemeMode(mode);
   }
 
 

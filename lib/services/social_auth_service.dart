@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:finder/models/user_profile.dart';
-import 'package:finder/utils/net/api.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
@@ -60,8 +59,7 @@ class SocialAuthService {
   }
 
   Future<void> syncProfileToBackend(UserProfile profile) async {
-    // 后端接口结构定义：POST /auth/profile/sync
-    // body: { id, nickname, avatarUrl, provider }
-    await Api.post('/auth/profile/sync', data: profile.toJson());
+    // mock API: later replace with real endpoint integration
+    await Future<void>.delayed(const Duration(milliseconds: 400));
   }
 }
