@@ -1,12 +1,13 @@
 import 'package:finder/app/app.dart';
 import 'package:finder/app/theme.dart';
+import 'package:finder/presentation/viewmodels/app_view_model.dart';
+import 'package:finder/services/app_settings_storage_service.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:finder/services/app_settings_storage_service.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 void main() {
-  // 沉浸式
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -46,30 +47,19 @@ class _AppState extends State<App> {
     await _settings.saveThemeMode(mode);
   }
 
-
   @override
   Widget build(BuildContext context) {
-    // return const CupertinoApp(
-    //   debugShowCheckedModeBanner: false,
-    //   // home: HomePage(),
-    //   home: HomePage(),
-    // );
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-
-      // 主题
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: _themeMode,
-
-      // 底部导航栏
-      // home: BottomMenuBarPage(),
-
-      // SliverAppBar 示例
-      // home: NestedScrollViewExample(),
-      home: MainScreen(
+    return ChangeNotifierProvider(
+      create: (_) => AppViewModel()..initialize(),
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
         themeMode: _themeMode,
-        onThemeModeChanged: _setThemeMode,
+        home: MainScreen(
+          themeMode: _themeMode,
+          onThemeModeChanged: _setThemeMode,
+        ),
       ),
     );
   }

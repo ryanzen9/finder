@@ -1,20 +1,14 @@
 import 'dart:io';
 
-import 'package:finder/api/finder_api.dart';
 import 'package:finder/api/finder_mock_api.dart';
-import 'package:finder/models/manual.dart';
 import 'package:finder/models/upload_asset.dart';
-import 'package:finder/models/user_profile.dart';
-import 'package:finder/services/auth_profile_cache_service.dart';
-import 'package:finder/services/manual_shelf_cache_service.dart';
-import 'package:finder/services/social_auth_service.dart';
-import 'package:finder/services/upload_cache_service.dart';
+import 'package:finder/presentation/viewmodels/app_view_model.dart';
 import 'package:finder/services/upload_picker_service.dart';
-import 'package:finder/services/upload_sync_service.dart';
 import 'package:finder/views/explore.dart';
 import 'package:finder/views/library.dart';
 import 'package:finder/views/settings.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class MainScreen extends StatefulWidget {
   final ThemeMode themeMode;
@@ -31,93 +25,11 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 0;
-
-  final IFinderApi _api = const FinderMockApi();
-  final UploadPickerService _uploadService = UploadPickerService();
-  final UploadCacheService _cacheService = UploadCacheService();
-  final UploadSyncService _syncService = const UploadSyncService();
-  final SocialAuthService _authService = SocialAuthService();
-  final AuthProfileCacheService _authCache = AuthProfileCacheService();
-  final ManualShelfCacheService _manualCache = ManualShelfCacheService();
-
-  final List<CachedUpload> _cachedUploads = [];
-  final List<ManualItem> _localManuals = [];
-  UserProfile? _profile;
-
-
-  @override
-  void initState() {
-    super.initState();
-    _restoreUploadCache();
-    _restoreProfile();
-    _restoreLocalManuals();
-  }
-
-  Future<void> _restoreUploadCache() async {
-    final restored = await _cacheService.load();
-    if (!mounted) return;
-    setState(() {
-      _cachedUploads
-        ..clear()
-        ..addAll(restored);
-    });
-  }
-
-
-
-  Future<void> _restoreLocalManuals() async {
-    final restored = await _manualCache.load();
-    if (!mounted) return;
-    setState(() {
-      _localManuals
-        ..clear()
-        ..addAll(restored);
-    });
-  }
-
-  Future<void> _addManualToShelf(ManualItem item) async {
-    final exists = _localManuals.any((e) => e.id == item.id);
-    if (exists) return;
-    _localManuals.insert(0, item);
-    await _manualCache.save(_localManuals);
-    if (!mounted) return;
-    setState(() {});
-  }
-
-  Future<void> _removeUploadById(String uploadId) async {
-    _cachedUploads.removeWhere((e) => e.id == uploadId || 'up-${e.id}' == uploadId);
-    await _cacheService.save(_cachedUploads);
-    if (!mounted) return;
-    setState(() {});
-  }
-
-  Future<void> _updateUploadMeta(String uploadId, {required String title, required String brand, required String category, required String description}) async {
-    final idx = _cachedUploads.indexWhere((e) => e.id == uploadId || 'up-${e.id}' == uploadId);
-    if (idx < 0) return;
-    final cur = _cachedUploads[idx];
-    _cachedUploads[idx] = cur.copyWith(
-      nickname: title,
-      brand: brand,
-      category: category,
-      description: description,
-      isDraft: false,
-    );
-    await _cacheService.save(_cachedUploads);
-    if (!mounted) return;
-    setState(() {});
-  }
-
-  Future<void> _restoreProfile() async {
-    final profile = await _authCache.load();
-    if (!mounted) return;
-    setState(() => _profile = profile);
-  }
-
   Future<void> _onAvatarTap() async {
-    if (_profile != null) {
+    final vm = context.read<AppViewModel>();
+    if (vm.profile != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已登录：${_profile!.nickname}')),
+        SnackBar(content: Text('已登录：${vm.profile!.nickname}')),
       );
       return;
     }
@@ -151,22 +63,8 @@ class _MainScreenState extends State<MainScreen> {
     if (action == null || !mounted) return;
 
     try {
-      UserProfile? profile;
-      if (action == 'google') {
-        profile = await _authService.signInWithGoogle();
-      } else {
-        profile = await _authService.signInWithApple();
-      }
-      if (profile == null || !mounted) return;
-
-      await _authCache.save(profile);
-      setState(() => _profile = profile);
-
-      try {
-        await _authService.syncProfileToBackend(profile);
-      } catch (_) {}
-
-      if (!mounted) return;
+      final profile = await vm.loginByProvider(action);
+      if (!mounted || profile == null) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('登录成功，欢迎 ${profile.nickname}')),
       );
@@ -179,8 +77,9 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _onScanTap() async {
-    // 如果存在草稿，直接恢复最近草稿表单
-    final drafts = _cachedUploads.where((e) => e.isDraft).toList();
+    final vm = context.read<AppViewModel>();
+
+    final drafts = vm.cachedUploads.where((e) => e.isDraft).toList();
     if (drafts.isNotEmpty) {
       drafts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       final first = drafts.first;
@@ -231,14 +130,15 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<List<CachedUpload>> _pickByAction(String action) async {
+    final picker = UploadPickerService();
     if (action == 'camera') {
-      final one = await _uploadService.pickFromCamera();
+      final one = await picker.pickFromCamera();
       return one == null ? [] : [one];
     }
     if (action == 'gallery') {
-      return _uploadService.pickMultiFromGallery();
+      return picker.pickMultiFromGallery();
     }
-    return _uploadService.pickFromFiles();
+    return picker.pickFromFiles();
   }
 
   Future<void> _openUploadFormSheet({
@@ -249,6 +149,7 @@ class _MainScreenState extends State<MainScreen> {
     String? initialNickname,
     String? initialDescription,
   }) async {
+    final picker = UploadPickerService();
     final result = await showModalBottomSheet<_UploadSubmitResult>(
       context: context,
       isScrollControlled: true,
@@ -258,7 +159,7 @@ class _MainScreenState extends State<MainScreen> {
       showDragHandle: true,
       builder: (_) => _UploadFormSheet(
         initials: initials,
-        picker: _uploadService,
+        picker: picker,
         initialBrand: initialBrand,
         initialCategory: initialCategory,
         initialNickname: initialNickname,
@@ -268,54 +169,32 @@ class _MainScreenState extends State<MainScreen> {
 
     if (result == null || !mounted) return;
 
-    if (result.discarded) return;
+    final vm = context.read<AppViewModel>();
+    final commit = await vm.commitUploadForm(
+      uploads: result.uploads,
+      meta: UploadFormMeta(
+        brand: result.brand,
+        category: result.category,
+        description: result.description,
+        nickname: result.nickname,
+      ),
+      discarded: result.discarded,
+      replacedDraftIds: replacedDraftIds,
+    );
 
-    if (replacedDraftIds.isNotEmpty) {
-      _cachedUploads.removeWhere((e) => replacedDraftIds.contains(e.id));
-    }
-
-    final prepared = result.uploads
-        .map(
-          (u) => u.copyWith(
-            brand: result.brand,
-            category: result.category,
-            nickname: result.nickname,
-            description: result.description,
-            isDraft: false,
-            syncStatus: SyncStatus.pending,
-          ),
-        )
-        .toList();
-
-    setState(() => _cachedUploads.insertAll(0, prepared));
-    await _cacheService.save(_cachedUploads);
-
-    int success = 0;
-    for (final item in prepared) {
-      final sync = await _syncService.sync(item);
-      final next = item.copyWith(
-        syncStatus: sync.ok ? SyncStatus.synced : SyncStatus.failed,
-        syncMessage: sync.message,
-        isDraft: !sync.ok,
-      );
-      final idx = _cachedUploads.indexWhere((e) => e.id == item.id);
-      if (idx >= 0) _cachedUploads[idx] = next;
-      if (sync.ok) success++;
-    }
-
-    await _cacheService.save(_cachedUploads);
-    if (!mounted) return;
-    setState(() {});
+    if (!mounted || commit.discarded) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: success == prepared.length ? Colors.green.shade600 : Colors.orange.shade700,
+        backgroundColor: commit.successCount == commit.totalCount ? Colors.green.shade600 : Colors.orange.shade700,
         content: Row(
           children: [
-            Icon(success == prepared.length ? Icons.check_circle_outline : Icons.error_outline, color: Colors.white),
+            Icon(commit.successCount == commit.totalCount ? Icons.check_circle_outline : Icons.error_outline, color: Colors.white),
             const SizedBox(width: 8),
-            Text(success == prepared.length ? '上传成功（$success）并加入本地书架' : '部分同步失败，已转为草稿'),
+            Text(commit.successCount == commit.totalCount
+                ? '上传成功（${commit.successCount}）并加入本地书架'
+                : '部分同步失败，已转为草稿'),
           ],
         ),
       ),
@@ -324,40 +203,46 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final vm = context.watch<AppViewModel>();
     final pages = [
       LibraryPage(
-        api: _api,
-        cachedUploads: _cachedUploads,
-        profile: _profile,
+        api: const FinderMockApi(),
+        cachedUploads: vm.cachedUploads,
+        profile: vm.profile,
         onAvatarTap: _onAvatarTap,
-        onRemoveUpload: _removeUploadById,
-        onUpdateUpload: _updateUploadMeta,
-        extraManuals: _localManuals,
+        onRemoveUpload: vm.removeUploadById,
+        onUpdateUpload: (uploadId, {required title, required brand, required category, required description}) =>
+            vm.updateUploadMeta(
+          uploadId: uploadId,
+          title: title,
+          brand: brand,
+          category: category,
+          description: description,
+        ),
+        extraManuals: vm.localManuals,
       ),
       ExplorePage(
-        api: _api,
-        cachedUploads: _cachedUploads,
-        localManuals: _localManuals,
-        onAddManualToShelf: _addManualToShelf,
+        api: const FinderMockApi(),
+        cachedUploads: vm.cachedUploads,
+        localManuals: vm.localManuals,
+        onAddManualToShelf: vm.addManualToShelf,
       ),
       SettingsPage(themeMode: widget.themeMode, onThemeModeChanged: widget.onThemeModeChanged),
     ];
 
-    const scanLabel = 'Scan';
-
     return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: pages),
-      floatingActionButton: _currentIndex == 0
+      body: IndexedStack(index: vm.currentIndex, children: pages),
+      floatingActionButton: vm.currentIndex == 0
           ? FloatingActionButton.extended(
               onPressed: _onScanTap,
-              label: Text(scanLabel),
+              label: const Text('Scan'),
               icon: const Icon(Icons.camera_alt_outlined),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             )
           : null,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        selectedIndex: vm.currentIndex,
+        onDestinationSelected: vm.setCurrentIndex,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.book_outlined), selectedIcon: Icon(Icons.book), label: '书架'),
           NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: '探索'),
