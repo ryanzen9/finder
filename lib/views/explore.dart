@@ -30,6 +30,7 @@ class _ExplorePageState extends State<ExplorePage> {
   final _ctrl = TextEditingController();
   final ExploreViewModel _vm = ExploreViewModel();
   final List<HelpRequest> _myPublishedRequests = [];
+  final Set<String> _respondedRequestIds = <String>{};
 
   late Future<List<HelpRequest>> _helpRequestsFuture;
   late Future<List<ManualItem>> _communityFuture;
@@ -78,9 +79,11 @@ class _ExplorePageState extends State<ExplorePage> {
         .toList();
   }
 
-  Future<void> _openRespondSheet(HelpRequest request) async {
+  Future<bool> _openRespondSheet(HelpRequest request) async {
+    if (_respondedRequestIds.contains(request.id)) return true;
+
     final base = await widget.api.getLibrary();
-    if (!mounted) return;
+    if (!mounted) return false;
     final shelf = [...widget.localManuals, ..._myShelfFromUploads, ...base];
 
     final picked = await showModalBottomSheet<ManualItem>(
@@ -93,14 +96,19 @@ class _ExplorePageState extends State<ExplorePage> {
       ),
     );
 
-    if (picked == null || !mounted) return;
+    if (picked == null || !mounted) return false;
 
     final ok = await _vm.respondHelp(requestId: request.id, manualId: picked.id);
 
-    if (!mounted) return;
+    if (!mounted) return false;
+    if (ok) {
+      setState(() => _respondedRequestIds.add(request.id));
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(ok ? '已响应：${picked.title}' : '响应失败，请稍后重试')),
     );
+    return ok;
   }
 
   Future<void> _addToShelf(ManualItem item) async {
@@ -146,6 +154,8 @@ class _ExplorePageState extends State<ExplorePage> {
         title: result.title,
         location: '我的位置',
         timeText: '刚刚',
+        description: result.description,
+        imagePath: result.imagePath,
       ),
     );
     _refreshExplore();
@@ -161,6 +171,7 @@ class _ExplorePageState extends State<ExplorePage> {
       MaterialPageRoute(
         builder: (_) => HelpListPage(
           requests: list,
+          respondedRequestIds: _respondedRequestIds,
           onRespond: _openRespondSheet,
         ),
       ),
@@ -189,6 +200,19 @@ class _ExplorePageState extends State<ExplorePage> {
     );
   }
 
+  void _openHelpDetail(HelpRequest request) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (_) => FractionallySizedBox(
+        heightFactor: 0.72,
+        child: _HelpRequestDetailSheet(request: request),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -202,7 +226,8 @@ class _ExplorePageState extends State<ExplorePage> {
           children: [
             Text('探索', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 4),
-            Text('发现外部资源与社区互助', style: Theme.of(context).textTheme.bodyMedium),
+            Text('发现外部资源与社区互助',
+                style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 12),
             SearchBar(
               controller: _ctrl,
@@ -223,7 +248,10 @@ class _ExplorePageState extends State<ExplorePage> {
                   future: _helpRequestsFuture,
                   builder: (context, snap) {
                     final list = snap.data ?? const <HelpRequest>[];
-                    return TextButton(onPressed: list.isEmpty ? null : () => _openHelpMore(list), child: const Text('查看更多'));
+                    return TextButton(
+                      onPressed: list.isEmpty ? null : () => _openHelpMore(list),
+                      child: const Text('查看更多'),
+                    );
                   },
                 ),
               ],
@@ -237,16 +265,20 @@ class _ExplorePageState extends State<ExplorePage> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 return Column(
-                  children: list
-                      .take(3)
-                      .map((e) => ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: CircleAvatar(child: Text(e.author[0])),
-                            title: Text(e.title),
-                            subtitle: Text('${e.timeText} · ${e.location}'),
-                            trailing: FilledButton(onPressed: () => _openRespondSheet(e), child: const Text('响应')),
-                          ))
-                      .toList(),
+                  children: list.take(3).map((e) {
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () => _openHelpDetail(e),
+                      leading: CircleAvatar(child: Text(e.author[0])),
+                      title: Text(e.title),
+                      subtitle: Text('${e.timeText} · ${e.location}'),
+                      trailing: _RespondActionButton(
+                        requestId: e.id,
+                        initiallyDone: _respondedRequestIds.contains(e.id),
+                        onRespond: () => _openRespondSheet(e),
+                      ),
+                    );
+                  }).toList(),
                 );
               },
             ),
@@ -259,7 +291,11 @@ class _ExplorePageState extends State<ExplorePage> {
                   future: _communityFuture,
                   builder: (context, snap) {
                     final list = snap.data ?? const <ManualItem>[];
-                    return TextButton(onPressed: list.isEmpty ? null : () => _openCommunityFeed(list), child: const Text('查看更多'));
+                    return TextButton(
+                      onPressed:
+                          list.isEmpty ? null : () => _openCommunityFeed(list),
+                      child: const Text('查看更多'),
+                    );
                   },
                 ),
               ],
@@ -273,28 +309,30 @@ class _ExplorePageState extends State<ExplorePage> {
                 }
                 final list = snap.data ?? [];
                 return Column(
-                  children: list
-                      .take(5)
-                      .map((e) => Card(
-                            elevation: 0,
-                            child: ListTile(
-                              leading: const Icon(Icons.description_outlined),
-                              title: Text(e.title),
-                              subtitle: Text('${e.brand} ${e.model}'),
-                              onTap: () => showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                showDragHandle: true,
-                                useSafeArea: true,
-                                builder: (_) => FractionallySizedBox(
-                                  heightFactor: 0.74,
-                                  child: _ManualDetailSheet(item: e),
-                                ),
-                              ),
-                              trailing: TextButton(onPressed: () => _addToShelf(e), child: const Text('Add')),
-                            ),
-                          ))
-                      .toList(),
+                  children: list.take(5).map((e) {
+                    return Card(
+                      elevation: 0,
+                      child: ListTile(
+                        leading: const Icon(Icons.description_outlined),
+                        title: Text(e.title),
+                        subtitle: Text('${e.brand} ${e.model}'),
+                        onTap: () => showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          showDragHandle: true,
+                          useSafeArea: true,
+                          builder: (_) => FractionallySizedBox(
+                            heightFactor: 0.74,
+                            child: _ManualDetailSheet(item: e),
+                          ),
+                        ),
+                        trailing: TextButton(
+                          onPressed: () => _addToShelf(e),
+                          child: const Text('Add'),
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 );
               },
             ),
@@ -307,8 +345,15 @@ class _ExplorePageState extends State<ExplorePage> {
 
 class HelpListPage extends StatelessWidget {
   final List<HelpRequest> requests;
-  final Future<void> Function(HelpRequest) onRespond;
-  const HelpListPage({super.key, required this.requests, required this.onRespond});
+  final Set<String> respondedRequestIds;
+  final Future<bool> Function(HelpRequest) onRespond;
+
+  const HelpListPage({
+    super.key,
+    required this.requests,
+    required this.respondedRequestIds,
+    required this.onRespond,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -321,16 +366,181 @@ class HelpListPage extends StatelessWidget {
           return Card(
             elevation: 0,
             child: ListTile(
+              onTap: () => showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                showDragHandle: true,
+                useSafeArea: true,
+                builder: (_) => FractionallySizedBox(
+                  heightFactor: 0.72,
+                  child: _HelpRequestDetailSheet(request: e),
+                ),
+              ),
               leading: CircleAvatar(child: Text(e.author[0])),
               title: Text(e.title),
               subtitle: Text('${e.timeText} · ${e.location}'),
-              trailing: FilledButton(onPressed: () => onRespond(e), child: const Text('响应')),
+              trailing: _RespondActionButton(
+                requestId: e.id,
+                initiallyDone: respondedRequestIds.contains(e.id),
+                onRespond: () => onRespond(e),
+              ),
             ),
           );
         },
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemCount: requests.length,
       ),
+    );
+  }
+}
+
+class _RespondActionButton extends StatefulWidget {
+  final String requestId;
+  final bool initiallyDone;
+  final Future<bool> Function() onRespond;
+
+  const _RespondActionButton({
+    required this.requestId,
+    required this.initiallyDone,
+    required this.onRespond,
+  });
+
+  @override
+  State<_RespondActionButton> createState() => _RespondActionButtonState();
+}
+
+class _RespondActionButtonState extends State<_RespondActionButton>
+    with SingleTickerProviderStateMixin {
+  late bool _done;
+  bool _loading = false;
+  late final AnimationController _rotationCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _done = widget.initiallyDone;
+    _rotationCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+    if (_done) {
+      _rotationCtrl.value = 1;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _RespondActionButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initiallyDone && !_done) {
+      _done = true;
+      _rotationCtrl.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _rotationCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleTap() async {
+    if (_done || _loading) return;
+    setState(() => _loading = true);
+    final ok = await widget.onRespond();
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _done = true);
+      await _rotationCtrl.forward();
+    }
+    setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton(
+      onPressed: (_done || _loading) ? null : _handleTap,
+      child: _loading
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : AnimatedBuilder(
+              animation: _rotationCtrl,
+              builder: (context, _) {
+                final turns = Tween<double>(begin: 0, end: 1).evaluate(
+                  CurvedAnimation(
+                    parent: _rotationCtrl,
+                    curve: Curves.easeInOutCubic,
+                  ),
+                );
+                return Transform.rotate(
+                  angle: turns * 6.2831853,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(_done ? Icons.check_box : Icons.sync, size: 18),
+                      const SizedBox(width: 4),
+                      Text(_done ? '已响应' : '响应'),
+                    ],
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _HelpRequestDetailSheet extends StatelessWidget {
+  final HelpRequest request;
+  const _HelpRequestDetailSheet({required this.request});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        Container(
+          height: 170,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.secondaryContainer,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: request.imagePath == null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.photo_outlined,
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        size: 32,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '暂无图片',
+                        style: TextStyle(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSecondaryContainer,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : Image.file(File(request.imagePath!), fit: BoxFit.cover),
+        ),
+        const SizedBox(height: 16),
+        Text(request.title, style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 8),
+        Text('${request.author} · ${request.timeText} · ${request.location}'),
+        const SizedBox(height: 14),
+        Text(
+          request.description.isEmpty ? '暂无描述' : request.description,
+          style: Theme.of(context).textTheme.bodyLarge,
+        ),
+      ],
     );
   }
 }
@@ -379,18 +589,28 @@ class CommunityFeedPage extends StatelessWidget {
                   ),
                   Padding(
                     padding: const EdgeInsets.all(10),
-                    child: Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Text('${item.brand} · ${item.room}', style: Theme.of(context).textTheme.bodySmall),
+                    child: Text(
+                      '${item.brand} · ${item.room}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ),
                   const Spacer(),
                   Padding(
                     padding: const EdgeInsets.all(10),
                     child: SizedBox(
                       width: double.infinity,
-                      child: FilledButton.tonal(onPressed: () => onAdd(item), child: const Text('Add')),
+                      child: FilledButton.tonal(
+                        onPressed: () => onAdd(item),
+                        child: const Text('Add'),
+                      ),
                     ),
                   ),
                 ],
@@ -454,7 +674,11 @@ class _ManualDetailSheet extends StatelessWidget {
         const SizedBox(height: 8),
         Text('${item.brand} · ${item.model} · ${item.room}'),
         const SizedBox(height: 12),
-        Wrap(spacing: 8, runSpacing: 8, children: item.tags.map((t) => Chip(label: Text(t.name))).toList()),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: item.tags.map((t) => Chip(label: Text(t.name))).toList(),
+        ),
       ],
     );
   }
@@ -555,7 +779,12 @@ class _PublishHelpSheetState extends State<_PublishHelpSheet> {
                       )
                     : ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: Image.file(File(_imagePath!), fit: BoxFit.cover, width: double.infinity, height: 128),
+                        child: Image.file(
+                          File(_imagePath!),
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: 128,
+                        ),
                       ),
               ),
             ),

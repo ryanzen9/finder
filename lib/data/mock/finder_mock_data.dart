@@ -240,6 +240,7 @@ class FinderMockData {
       title: '需要飞利浦空气炸锅说明书',
       location: '上海市',
       timeText: '15 分钟前',
+      description: '型号是 HD9650，家里老人不会设置预热和定时，求一份可直接看的说明书。',
     ),
     HelpRequest(
       id: 'r-002',
@@ -247,6 +248,7 @@ class FinderMockData {
       title: '寻找徕卡镜头校准指南',
       location: '陆家嘴',
       timeText: '1 小时前',
+      description: '手头是 Leica Q3，最近对焦偏软，想找官方校准和日常维护指南。',
     ),
     HelpRequest(
       id: 'r-003',
@@ -254,6 +256,7 @@ class FinderMockData {
       title: '想要 LG OLED 77 使用技巧',
       location: '静安寺',
       timeText: '今天',
+      description: '主要想知道家庭影院模式参数怎么调，以及防烧屏建议。',
     ),
     HelpRequest(
       id: 'r-004',
@@ -261,6 +264,7 @@ class FinderMockData {
       title: '博世洗碗机报警 E15 怎么处理？',
       location: '徐汇',
       timeText: '2 小时前',
+      description: '机器进水后提示 E15，已经断电重启过一次，想知道进一步排查步骤。',
     ),
   ];
 }

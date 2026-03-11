@@ -4,6 +4,8 @@ class HelpRequest {
   final String title;
   final String location;
   final String timeText;
+  final String description;
+  final String? imagePath;
 
   const HelpRequest({
     required this.id,
@@ -11,5 +13,7 @@ class HelpRequest {
     required this.title,
     required this.location,
     required this.timeText,
+    this.description = '',
+    this.imagePath,
   });
 }
