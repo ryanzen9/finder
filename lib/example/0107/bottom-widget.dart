@@ -41,6 +41,7 @@ class _CustomerButtomState extends State<CustomerButtom> {
   Color? _bgColor;
   Color? _textColor;
 
+  @override
   void initState() {
     super.initState();
     // 初始化按钮样式

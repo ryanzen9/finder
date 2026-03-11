@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 class CustomerSliverAppBarDelegate extends StatelessWidget {
+  const CustomerSliverAppBarDelegate({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
