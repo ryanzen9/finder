@@ -12,4 +12,13 @@ class MockApiService {
     await Future<void>.delayed(const Duration(milliseconds: 550));
     return _random.nextInt(100) >= 3;
   }
+
+  Future<bool> publishHelpRequest({
+    required String title,
+    required String description,
+    String? imagePath,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+    return _random.nextInt(100) >= 5;
+  }
 }

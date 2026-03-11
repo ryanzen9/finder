@@ -12,4 +12,16 @@ class ExploreViewModel {
   Future<bool> addCommunityManual({required String manualId}) {
     return _api.addCommunityManual(manualId: manualId);
   }
+
+  Future<bool> publishHelpRequest({
+    required String title,
+    required String description,
+    String? imagePath,
+  }) {
+    return _api.publishHelpRequest(
+      title: title,
+      description: description,
+      imagePath: imagePath,
+    );
+  }
 }

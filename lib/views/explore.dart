@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:finder/api/finder_api.dart';
 import 'package:finder/models/help_request.dart';
 import 'package:finder/models/manual.dart';
 import 'package:finder/models/upload_asset.dart';
 import 'package:finder/presentation/viewmodels/explore_view_model.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ExplorePage extends StatefulWidget {
   final IFinderApi api;
@@ -26,11 +29,34 @@ class ExplorePage extends StatefulWidget {
 class _ExplorePageState extends State<ExplorePage> {
   final _ctrl = TextEditingController();
   final ExploreViewModel _vm = ExploreViewModel();
+  final List<HelpRequest> _myPublishedRequests = [];
+
+  late Future<List<HelpRequest>> _helpRequestsFuture;
+  late Future<List<ManualItem>> _communityFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _helpRequestsFuture = _loadHelpRequests();
+    _communityFuture = widget.api.searchCommunity('');
+  }
 
   @override
   void dispose() {
     _ctrl.dispose();
     super.dispose();
+  }
+
+  Future<List<HelpRequest>> _loadHelpRequests() async {
+    final remote = await widget.api.getHelpRequests();
+    return [..._myPublishedRequests, ...remote];
+  }
+
+  void _refreshExplore() {
+    setState(() {
+      _helpRequestsFuture = _loadHelpRequests();
+      _communityFuture = widget.api.searchCommunity(_ctrl.text);
+    });
   }
 
   List<ManualItem> get _myShelfFromUploads {
@@ -88,6 +114,47 @@ class _ExplorePageState extends State<ExplorePage> {
     );
   }
 
+  Future<void> _openPublishSheet() async {
+    final result = await showModalBottomSheet<_PublishDraftResult>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const _PublishHelpSheet(),
+    );
+
+    if (result == null || !mounted) return;
+
+    final ok = await _vm.publishHelpRequest(
+      title: result.title,
+      description: result.description,
+      imagePath: result.imagePath,
+    );
+
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('发布失败，请稍后重试')),
+      );
+      return;
+    }
+
+    _myPublishedRequests.insert(
+      0,
+      HelpRequest(
+        id: 'local-${DateTime.now().millisecondsSinceEpoch}',
+        author: '我',
+        title: result.title,
+        location: '我的位置',
+        timeText: '刚刚',
+      ),
+    );
+    _refreshExplore();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('发布成功')),
+    );
+  }
+
   void _openHelpMore(List<HelpRequest> list) {
     Navigator.push(
       context,
@@ -125,6 +192,10 @@ class _ExplorePageState extends State<ExplorePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openPublishSheet,
+        child: const Icon(Icons.add),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -136,7 +207,11 @@ class _ExplorePageState extends State<ExplorePage> {
             SearchBar(
               controller: _ctrl,
               hintText: '众包搜索：品牌/型号',
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) {
+                setState(() {
+                  _communityFuture = widget.api.searchCommunity(_ctrl.text);
+                });
+              },
               leading: const Icon(Icons.search),
             ),
             const SizedBox(height: 16),
@@ -145,7 +220,7 @@ class _ExplorePageState extends State<ExplorePage> {
               children: [
                 Text('求助悬赏', style: Theme.of(context).textTheme.titleMedium),
                 FutureBuilder<List<HelpRequest>>(
-                  future: widget.api.getHelpRequests(),
+                  future: _helpRequestsFuture,
                   builder: (context, snap) {
                     final list = snap.data ?? const <HelpRequest>[];
                     return TextButton(onPressed: list.isEmpty ? null : () => _openHelpMore(list), child: const Text('查看更多'));
@@ -155,7 +230,7 @@ class _ExplorePageState extends State<ExplorePage> {
             ),
             const SizedBox(height: 8),
             FutureBuilder<List<HelpRequest>>(
-              future: widget.api.getHelpRequests(),
+              future: _helpRequestsFuture,
               builder: (context, snap) {
                 final list = snap.data ?? [];
                 if (snap.connectionState != ConnectionState.done) {
@@ -181,7 +256,7 @@ class _ExplorePageState extends State<ExplorePage> {
               children: [
                 Text('社区结果', style: Theme.of(context).textTheme.titleMedium),
                 FutureBuilder<List<ManualItem>>(
-                  future: widget.api.searchCommunity(_ctrl.text),
+                  future: _communityFuture,
                   builder: (context, snap) {
                     final list = snap.data ?? const <ManualItem>[];
                     return TextButton(onPressed: list.isEmpty ? null : () => _openCommunityFeed(list), child: const Text('查看更多'));
@@ -191,7 +266,7 @@ class _ExplorePageState extends State<ExplorePage> {
             ),
             const SizedBox(height: 8),
             FutureBuilder<List<ManualItem>>(
-              future: widget.api.searchCommunity(_ctrl.text),
+              future: _communityFuture,
               builder: (context, snap) {
                 if (snap.connectionState != ConnectionState.done) {
                   return const Center(child: CircularProgressIndicator());
@@ -381,6 +456,147 @@ class _ManualDetailSheet extends StatelessWidget {
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8, children: item.tags.map((t) => Chip(label: Text(t.name))).toList()),
       ],
+    );
+  }
+}
+
+class _PublishDraftResult {
+  final String title;
+  final String description;
+  final String? imagePath;
+
+  const _PublishDraftResult({
+    required this.title,
+    required this.description,
+    required this.imagePath,
+  });
+}
+
+class _PublishHelpSheet extends StatefulWidget {
+  const _PublishHelpSheet();
+
+  @override
+  State<_PublishHelpSheet> createState() => _PublishHelpSheetState();
+}
+
+class _PublishHelpSheetState extends State<_PublishHelpSheet> {
+  final _titleCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _picker = ImagePicker();
+
+  String? _imagePath;
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    final file = await _picker.pickImage(source: ImageSource.gallery);
+    if (file == null || !mounted) return;
+    setState(() => _imagePath = file.path);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 12,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('发布寻物', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _titleCtrl,
+              decoration: const InputDecoration(
+                labelText: '寻物标题 *',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _descCtrl,
+              minLines: 3,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: '描述 *',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: _pickImage,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: double.infinity,
+                height: 128,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                ),
+                alignment: Alignment.center,
+                child: _imagePath == null
+                    ? const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.image_outlined),
+                          SizedBox(height: 6),
+                          Text('点击添加图片（占位）'),
+                        ],
+                      )
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(File(_imagePath!), fit: BoxFit.cover, width: double.infinity, height: 128),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('取消'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () {
+                      final title = _titleCtrl.text.trim();
+                      final description = _descCtrl.text.trim();
+                      if (title.isEmpty || description.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('请先填写标题和描述')),
+                        );
+                        return;
+                      }
+                      Navigator.pop(
+                        context,
+                        _PublishDraftResult(
+                          title: title,
+                          description: description,
+                          imagePath: _imagePath,
+                        ),
+                      );
+                    },
+                    child: const Text('发布'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
