@@ -252,7 +252,6 @@ class _ExplorePageState extends State<ExplorePage> {
             SearchBar(
               controller: _ctrl,
               hintText: '众包搜索：品牌/型号',
-              readOnly: true,
               onTap: () => _openCommunitySearchPage(_ctrl.text),
               leading: const Icon(Icons.search),
             ),
@@ -458,7 +457,8 @@ class _TriStateRespondButton extends StatefulWidget {
   State<_TriStateRespondButton> createState() => _TriStateRespondButtonState();
 }
 
-class _TriStateRespondButtonState extends State<_TriStateRespondButton> {
+class _TriStateRespondButtonState extends State<_TriStateRespondButton>
+    with TickerProviderStateMixin {
   late bool _done;
   bool _loading = false;
 
