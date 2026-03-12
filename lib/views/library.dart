@@ -179,6 +179,11 @@ class _LibraryPageState extends State<LibraryPage> {
                                                   Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
                                                   const SizedBox(height: 4),
                                                   Text(item.room, style: Theme.of(context).textTheme.bodySmall),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    '更新于 ${item.updatedAt.toString().split(' ').first}',
+                                                    style: Theme.of(context).textTheme.bodySmall,
+                                                  ),
                                                   const Spacer(),
 
                                                 ],
@@ -379,14 +384,6 @@ class _ManualDetailSheet extends StatelessWidget {
             leading: const Icon(Icons.event_available_outlined),
             title: const Text('最近更新时间'),
             subtitle: Text(item.updatedAt.toString().split(' ').first),
-          ),
-        ),
-        Card(
-          elevation: 0,
-          child: ListTile(
-            leading: const Icon(Icons.verified_outlined),
-            title: const Text('保修状态'),
-            subtitle: Text(item.underWarranty ? '保修中' : '已过保'),
           ),
         ),
         const SizedBox(height: 16),

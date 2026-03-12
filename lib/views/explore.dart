@@ -224,7 +224,11 @@ class _ExplorePageState extends State<ExplorePage> {
       useSafeArea: true,
       builder: (_) => FractionallySizedBox(
         heightFactor: 0.72,
-        child: _HelpRequestDetailSheet(request: request),
+        child: _HelpRequestDetailSheet(
+          request: request,
+          initiallyDone: _respondedRequestIds.contains(request.id),
+          onRespond: () => _openRespondSheet(request),
+        ),
       ),
     );
   }
@@ -385,7 +389,11 @@ class HelpListPage extends StatelessWidget {
                 useSafeArea: true,
                 builder: (_) => FractionallySizedBox(
                   heightFactor: 0.72,
-                  child: _HelpRequestDetailSheet(request: e),
+                  child: _HelpRequestDetailSheet(
+                    request: e,
+                    initiallyDone: respondedRequestIds.contains(e.id),
+                    onRespond: () => onRespond(e),
+                  ),
                 ),
               ),
               leading: CircleAvatar(child: Text(e.author[0])),
@@ -422,6 +430,35 @@ class _RespondActionButton extends StatefulWidget {
 }
 
 class _RespondActionButtonState extends State<_RespondActionButton> {
+  @override
+  Widget build(BuildContext context) {
+    return _TriStateRespondButton(
+      initiallyDone: widget.initiallyDone,
+      onRespond: widget.onRespond,
+      fullWidth: false,
+    );
+  }
+}
+
+class _TriStateRespondButton extends StatefulWidget {
+  final bool initiallyDone;
+  final Future<bool> Function() onRespond;
+  final bool closeOnSuccess;
+  final bool fullWidth;
+
+  const _TriStateRespondButton({
+    super.key,
+    this.initiallyDone = false,
+    required this.onRespond,
+    this.closeOnSuccess = false,
+    this.fullWidth = true,
+  });
+
+  @override
+  State<_TriStateRespondButton> createState() => _TriStateRespondButtonState();
+}
+
+class _TriStateRespondButtonState extends State<_TriStateRespondButton> {
   late bool _done;
   bool _loading = false;
 
@@ -432,7 +469,7 @@ class _RespondActionButtonState extends State<_RespondActionButton> {
   }
 
   @override
-  void didUpdateWidget(covariant _RespondActionButton oldWidget) {
+  void didUpdateWidget(covariant _TriStateRespondButton oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.initiallyDone && !_done) {
       setState(() => _done = true);
@@ -449,6 +486,10 @@ class _RespondActionButtonState extends State<_RespondActionButton> {
         _done = true;
         _loading = false;
       });
+      if (widget.closeOnSuccess) {
+        await Future<void>.delayed(const Duration(milliseconds: 220));
+        if (mounted) Navigator.of(context).pop();
+      }
       return;
     }
     setState(() => _loading = false);
@@ -456,34 +497,41 @@ class _RespondActionButtonState extends State<_RespondActionButton> {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton(
-      onPressed: (_done || _loading) ? null : _handleTap,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(scale: animation, child: child),
+    return SizedBox(
+      width: widget.fullWidth ? double.infinity : null,
+      child: FilledButton(
+        style: FilledButton.styleFrom(
+          shape: const StadiumBorder(),
+          padding: const EdgeInsets.symmetric(vertical: 12),
         ),
-        child: _loading
-            ? const SizedBox(
-                key: ValueKey('loading'),
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : _done
-                ? const Icon(
-                    Icons.check,
-                    key: ValueKey('success'),
-                    size: 18,
-                    color: Colors.grey,
-                  )
-                : const Text(
-                    '响应',
-                    key: ValueKey('idle'),
-                  ),
+        onPressed: (_done || _loading) ? null : _handleTap,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(scale: animation, child: child),
+          ),
+          child: _loading
+              ? const SizedBox(
+                  key: ValueKey('loading'),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : _done
+                  ? const Icon(
+                      Icons.check,
+                      key: ValueKey('success'),
+                      size: 18,
+                      color: Colors.grey,
+                    )
+                  : const Text(
+                      '响应',
+                      key: ValueKey('idle'),
+                    ),
+        ),
       ),
     );
   }
@@ -491,7 +539,14 @@ class _RespondActionButtonState extends State<_RespondActionButton> {
 
 class _HelpRequestDetailSheet extends StatelessWidget {
   final HelpRequest request;
-  const _HelpRequestDetailSheet({required this.request});
+  final bool initiallyDone;
+  final Future<bool> Function() onRespond;
+
+  const _HelpRequestDetailSheet({
+    required this.request,
+    required this.initiallyDone,
+    required this.onRespond,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -537,6 +592,11 @@ class _HelpRequestDetailSheet extends StatelessWidget {
         Text(
           request.description.isEmpty ? '暂无描述' : request.description,
           style: Theme.of(context).textTheme.bodyLarge,
+        ),
+        const SizedBox(height: 20),
+        _TriStateRespondButton(
+          initiallyDone: initiallyDone,
+          onRespond: onRespond,
         ),
       ],
     );
@@ -778,20 +838,12 @@ class _ManualDetailSheet extends StatelessWidget {
         Text('${item.brand} · ${item.model} · ${item.room}'),
         if (onRespond != null) ...[
           const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () async {
-                await onRespond!.call();
-                if (context.mounted) Navigator.pop(context);
-              },
-              icon: const Icon(Icons.sync),
-              label: const Text('响应'),
-              style: FilledButton.styleFrom(
-                shape: const StadiumBorder(),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-            ),
+          _TriStateRespondButton(
+            onRespond: () async {
+              await onRespond!.call();
+              return true;
+            },
+            closeOnSuccess: true,
           ),
         ],
       ],
@@ -819,6 +871,7 @@ class _PublishHelpSheet extends StatefulWidget {
 }
 
 class _PublishHelpSheetState extends State<_PublishHelpSheet> {
+  final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _picker = ImagePicker();
@@ -848,98 +901,112 @@ class _PublishHelpSheetState extends State<_PublishHelpSheet> {
         bottom: MediaQuery.of(context).viewInsets.bottom + 16,
       ),
       child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('发布寻物', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _titleCtrl,
-              decoration: const InputDecoration(
-                labelText: '寻物标题 *',
-                border: OutlineInputBorder(),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('发布寻物', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 14),
+              _m3Field(
+                ctrl: _titleCtrl,
+                label: '寻物标题 *',
+                validator: (v) => (v == null || v.trim().isEmpty) ? '请输入标题' : null,
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _descCtrl,
-              minLines: 3,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: '描述 *',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 10),
+              _m3Field(
+                ctrl: _descCtrl,
+                label: '描述 *',
+                maxLines: 4,
+                validator: (v) => (v == null || v.trim().isEmpty) ? '请输入描述' : null,
               ),
-            ),
-            const SizedBox(height: 12),
-            InkWell(
-              onTap: _pickImage,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: double.infinity,
-                height: 128,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                ),
-                alignment: Alignment.center,
-                child: _imagePath == null
-                    ? const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.image_outlined),
-                          SizedBox(height: 6),
-                          Text('点击添加图片（占位）'),
-                        ],
-                      )
-                    : ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.file(
-                          File(_imagePath!),
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: 128,
-                        ),
-                      ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('取消'),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: _pickImage,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  height: 128,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: Theme.of(context).colorScheme.surfaceContainerHigh,
                   ),
+                  alignment: Alignment.center,
+                  child: _imagePath == null
+                      ? const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.image_outlined),
+                            SizedBox(height: 6),
+                            Text('点击添加图片'),
+                          ],
+                        )
+                      : ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.file(
+                            File(_imagePath!),
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: 128,
+                          ),
+                        ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () {
-                      final title = _titleCtrl.text.trim();
-                      final description = _descCtrl.text.trim();
-                      if (title.isEmpty || description.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('请先填写标题和描述')),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                      label: const Text('取消'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        if (!_formKey.currentState!.validate()) return;
+                        Navigator.pop(
+                          context,
+                          _PublishDraftResult(
+                            title: _titleCtrl.text.trim(),
+                            description: _descCtrl.text.trim(),
+                            imagePath: _imagePath,
+                          ),
                         );
-                        return;
-                      }
-                      Navigator.pop(
-                        context,
-                        _PublishDraftResult(
-                          title: title,
-                          description: description,
-                          imagePath: _imagePath,
-                        ),
-                      );
-                    },
-                    child: const Text('发布'),
+                      },
+                      icon: const Icon(Icons.campaign_outlined),
+                      label: const Text('发布'),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _m3Field({
+    required TextEditingController ctrl,
+    required String label,
+    String? Function(String?)? validator,
+    int maxLines = 1,
+  }) {
+    return TextFormField(
+      controller: ctrl,
+      validator: validator,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        filled: true,
+        fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
       ),
     );
   }
