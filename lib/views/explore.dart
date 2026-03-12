@@ -191,10 +191,26 @@ class _ExplorePageState extends State<ExplorePage> {
             useSafeArea: true,
             builder: (_) => FractionallySizedBox(
               heightFactor: 0.74,
-              child: _ManualDetailSheet(item: item),
+              child: _ManualDetailSheet(
+                item: item,
+                onRespond: () => _addToShelf(item),
+              ),
             ),
           ),
           onAdd: _addToShelf,
+        ),
+      ),
+    );
+  }
+
+  void _openCommunitySearchPage(String keyword) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CommunitySearchPage(
+          api: widget.api,
+          initialKeyword: keyword,
+          onRespond: _addToShelf,
         ),
       ),
     );
@@ -232,11 +248,8 @@ class _ExplorePageState extends State<ExplorePage> {
             SearchBar(
               controller: _ctrl,
               hintText: '众包搜索：品牌/型号',
-              onChanged: (_) {
-                setState(() {
-                  _communityFuture = widget.api.searchCommunity(_ctrl.text);
-                });
-              },
+              readOnly: true,
+              onTap: () => _openCommunitySearchPage(_ctrl.text),
               leading: const Icon(Icons.search),
             ),
             const SizedBox(height: 16),
@@ -293,7 +306,7 @@ class _ExplorePageState extends State<ExplorePage> {
                     final list = snap.data ?? const <ManualItem>[];
                     return TextButton(
                       onPressed:
-                          list.isEmpty ? null : () => _openCommunityFeed(list),
+                          list.isEmpty ? null : () => _openCommunitySearchPage(_ctrl.text),
                       child: const Text('查看更多'),
                     );
                   },
@@ -323,12 +336,11 @@ class _ExplorePageState extends State<ExplorePage> {
                           useSafeArea: true,
                           builder: (_) => FractionallySizedBox(
                             heightFactor: 0.74,
-                            child: _ManualDetailSheet(item: e),
+                            child: _ManualDetailSheet(
+                              item: e,
+                              onRespond: () => _addToShelf(e),
+                            ),
                           ),
-                        ),
-                        trailing: TextButton(
-                          onPressed: () => _addToShelf(e),
-                          child: const Text('Add'),
                         ),
                       ),
                     );
@@ -531,6 +543,106 @@ class _HelpRequestDetailSheet extends StatelessWidget {
   }
 }
 
+class CommunitySearchPage extends StatefulWidget {
+  final IFinderApi api;
+  final String initialKeyword;
+  final Future<void> Function(ManualItem) onRespond;
+
+  const CommunitySearchPage({
+    super.key,
+    required this.api,
+    required this.initialKeyword,
+    required this.onRespond,
+  });
+
+  @override
+  State<CommunitySearchPage> createState() => _CommunitySearchPageState();
+}
+
+class _CommunitySearchPageState extends State<CommunitySearchPage> {
+  late final TextEditingController _ctrl;
+  late Future<List<ManualItem>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.initialKeyword);
+    _future = widget.api.searchCommunity(widget.initialKeyword);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _search() {
+    setState(() {
+      _future = widget.api.searchCommunity(_ctrl.text);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('社区结果')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        children: [
+          SearchBar(
+            controller: _ctrl,
+            hintText: '输入品牌/型号查询',
+            onChanged: (_) => _search(),
+            onSubmitted: (_) => _search(),
+            leading: const Icon(Icons.search),
+          ),
+          const SizedBox(height: 12),
+          FutureBuilder<List<ManualItem>>(
+            future: _future,
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final list = snap.data ?? const <ManualItem>[];
+              if (list.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.only(top: 40),
+                  child: Center(child: Text('未找到匹配结果')),
+                );
+              }
+              return Column(
+                children: list.map((e) {
+                  return Card(
+                    elevation: 0,
+                    child: ListTile(
+                      leading: const Icon(Icons.description_outlined),
+                      title: Text(e.title),
+                      subtitle: Text('${e.brand} ${e.model}'),
+                      onTap: () => showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        showDragHandle: true,
+                        useSafeArea: true,
+                        builder: (_) => FractionallySizedBox(
+                          heightFactor: 0.74,
+                          child: _ManualDetailSheet(
+                            item: e,
+                            onRespond: () => widget.onRespond(e),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class CommunityFeedPage extends StatelessWidget {
   final List<ManualItem> items;
   final void Function(ManualItem) onTapItem;
@@ -638,7 +750,12 @@ class _SelectManualSheet extends StatelessWidget {
 
 class _ManualDetailSheet extends StatelessWidget {
   final ManualItem item;
-  const _ManualDetailSheet({required this.item});
+  final Future<void> Function()? onRespond;
+
+  const _ManualDetailSheet({
+    required this.item,
+    this.onRespond,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -659,7 +776,24 @@ class _ManualDetailSheet extends StatelessWidget {
         Text(item.title, style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 8),
         Text('${item.brand} · ${item.model} · ${item.room}'),
-
+        if (onRespond != null) ...[
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () async {
+                await onRespond!.call();
+                if (context.mounted) Navigator.pop(context);
+              },
+              icon: const Icon(Icons.sync),
+              label: const Text('响应'),
+              style: FilledButton.styleFrom(
+                shape: const StadiumBorder(),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
