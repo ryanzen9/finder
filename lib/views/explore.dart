@@ -409,38 +409,22 @@ class _RespondActionButton extends StatefulWidget {
   State<_RespondActionButton> createState() => _RespondActionButtonState();
 }
 
-class _RespondActionButtonState extends State<_RespondActionButton>
-    with SingleTickerProviderStateMixin {
+class _RespondActionButtonState extends State<_RespondActionButton> {
   late bool _done;
   bool _loading = false;
-  late final AnimationController _rotationCtrl;
 
   @override
   void initState() {
     super.initState();
     _done = widget.initiallyDone;
-    _rotationCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-    );
-    if (_done) {
-      _rotationCtrl.value = 1;
-    }
   }
 
   @override
   void didUpdateWidget(covariant _RespondActionButton oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.initiallyDone && !_done) {
-      _done = true;
-      _rotationCtrl.forward();
+      setState(() => _done = true);
     }
-  }
-
-  @override
-  void dispose() {
-    _rotationCtrl.dispose();
-    super.dispose();
   }
 
   Future<void> _handleTap() async {
@@ -449,8 +433,11 @@ class _RespondActionButtonState extends State<_RespondActionButton>
     final ok = await widget.onRespond();
     if (!mounted) return;
     if (ok) {
-      setState(() => _done = true);
-      await _rotationCtrl.forward();
+      setState(() {
+        _done = true;
+        _loading = false;
+      });
+      return;
     }
     setState(() => _loading = false);
   }
@@ -459,34 +446,33 @@ class _RespondActionButtonState extends State<_RespondActionButton>
   Widget build(BuildContext context) {
     return FilledButton(
       onPressed: (_done || _loading) ? null : _handleTap,
-      child: _loading
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : AnimatedBuilder(
-              animation: _rotationCtrl,
-              builder: (context, _) {
-                final turns = Tween<double>(begin: 0, end: 1).evaluate(
-                  CurvedAnimation(
-                    parent: _rotationCtrl,
-                    curve: Curves.easeInOutCubic,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(scale: animation, child: child),
+        ),
+        child: _loading
+            ? const SizedBox(
+                key: ValueKey('loading'),
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : _done
+                ? const Icon(
+                    Icons.check,
+                    key: ValueKey('success'),
+                    size: 18,
+                    color: Colors.grey,
+                  )
+                : const Text(
+                    '响应',
+                    key: ValueKey('idle'),
                   ),
-                );
-                return Transform.rotate(
-                  angle: turns * 6.2831853,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(_done ? Icons.check_box : Icons.sync, size: 18),
-                      const SizedBox(width: 4),
-                      Text(_done ? '已响应' : '响应'),
-                    ],
-                  ),
-                );
-              },
-            ),
+      ),
     );
   }
 }
