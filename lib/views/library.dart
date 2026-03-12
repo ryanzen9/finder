@@ -482,6 +482,19 @@ class _UploadBundleDetailSheet extends StatefulWidget {
 
 class _UploadBundleDetailSheetState extends State<_UploadBundleDetailSheet> {
   int _index = 0;
+  late final PageController _pageCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageCtrl = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -492,6 +505,7 @@ class _UploadBundleDetailSheetState extends State<_UploadBundleDetailSheet> {
         SizedBox(
           height: 220,
           child: PageView.builder(
+            controller: _pageCtrl,
             itemCount: files.length,
             onPageChanged: (i) => setState(() => _index = i),
             itemBuilder: (_, i) {
@@ -513,6 +527,45 @@ class _UploadBundleDetailSheetState extends State<_UploadBundleDetailSheet> {
         ),
         const SizedBox(height: 8),
         Center(child: Text('${_index + 1}/${files.length}', style: Theme.of(context).textTheme.bodySmall)),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 56,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: files.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final selected = i == _index;
+              return GestureDetector(
+                onTap: () => _pageCtrl.animateToPage(
+                  i,
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOut,
+                ),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 56,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: selected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.file(
+                    File(files[i].path),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                      child: const Icon(Icons.image_not_supported_outlined, size: 16),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
         const SizedBox(height: 16),
         Text(widget.bundle.title, style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 8),
