@@ -87,7 +87,6 @@ class _MainScreenState extends State<MainScreen> {
         initials: drafts,
         replacedDraftIds: drafts.map((e) => e.id).toList(),
         initialBrand: first.brand,
-        initialCategory: first.category,
         initialNickname: first.nickname,
         initialDescription: first.description,
       );
@@ -145,7 +144,6 @@ class _MainScreenState extends State<MainScreen> {
     required List<CachedUpload> initials,
     required List<String> replacedDraftIds,
     String? initialBrand,
-    String? initialCategory,
     String? initialNickname,
     String? initialDescription,
   }) async {
@@ -161,7 +159,6 @@ class _MainScreenState extends State<MainScreen> {
         initials: initials,
         picker: picker,
         initialBrand: initialBrand,
-        initialCategory: initialCategory,
         initialNickname: initialNickname,
         initialDescription: initialDescription,
       ),
@@ -174,7 +171,6 @@ class _MainScreenState extends State<MainScreen> {
       uploads: result.uploads,
       meta: UploadFormMeta(
         brand: result.brand,
-        category: result.category,
         description: result.description,
         nickname: result.nickname,
       ),
@@ -211,12 +207,11 @@ class _MainScreenState extends State<MainScreen> {
         profile: vm.profile,
         onAvatarTap: _onAvatarTap,
         onRemoveUpload: vm.removeUploadById,
-        onUpdateUpload: (uploadId, {required title, required brand, required category, required description}) =>
+        onUpdateUpload: (uploadId, {required title, required brand, required description}) =>
             vm.updateUploadMeta(
           uploadId: uploadId,
           title: title,
           brand: brand,
-          category: category,
           description: description,
         ),
         extraManuals: vm.localManuals,
@@ -256,7 +251,6 @@ class _MainScreenState extends State<MainScreen> {
 class _UploadSubmitResult {
   final List<CachedUpload> uploads;
   final String brand;
-  final String category;
   final String description;
   final String nickname;
   final bool discarded;
@@ -264,7 +258,6 @@ class _UploadSubmitResult {
   const _UploadSubmitResult({
     required this.uploads,
     required this.brand,
-    required this.category,
     required this.description,
     required this.nickname,
     this.discarded = false,
@@ -275,7 +268,6 @@ class _UploadFormSheet extends StatefulWidget {
   final List<CachedUpload> initials;
   final UploadPickerService picker;
   final String? initialBrand;
-  final String? initialCategory;
   final String? initialDescription;
   final String? initialNickname;
 
@@ -283,7 +275,6 @@ class _UploadFormSheet extends StatefulWidget {
     required this.initials,
     required this.picker,
     this.initialBrand,
-    this.initialCategory,
     this.initialDescription,
     this.initialNickname,
   });
@@ -295,7 +286,6 @@ class _UploadFormSheet extends StatefulWidget {
 class _UploadFormSheetState extends State<_UploadFormSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _brandCtrl;
-  late final TextEditingController _categoryCtrl;
   late final TextEditingController _descCtrl;
   late final TextEditingController _nickCtrl;
 
@@ -307,11 +297,10 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
     super.initState();
     _uploads = List<CachedUpload>.from(widget.initials);
     _brandCtrl = TextEditingController(text: widget.initialBrand ?? '');
-    _categoryCtrl = TextEditingController(text: widget.initialCategory ?? '');
     _descCtrl = TextEditingController(text: widget.initialDescription ?? '');
     _nickCtrl = TextEditingController(text: widget.initialNickname ?? '');
 
-    for (final c in [_brandCtrl, _categoryCtrl, _descCtrl, _nickCtrl]) {
+    for (final c in [_brandCtrl, _descCtrl, _nickCtrl]) {
       c.addListener(() {
         if (!_dirty && mounted) setState(() => _dirty = true);
       });
@@ -321,7 +310,6 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
   @override
   void dispose() {
     _brandCtrl.dispose();
-    _categoryCtrl.dispose();
     _descCtrl.dispose();
     _nickCtrl.dispose();
     super.dispose();
@@ -401,7 +389,6 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
       navigator.pop(const _UploadSubmitResult(
         uploads: [],
         brand: '',
-        category: '',
         description: '',
         nickname: '',
         discarded: true,
@@ -413,7 +400,6 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
     return _UploadSubmitResult(
       uploads: _uploads,
       brand: _brandCtrl.text.trim(),
-      category: _categoryCtrl.text.trim(),
       nickname: _nickCtrl.text.trim(),
       description: _descCtrl.text.trim(),
     );
@@ -473,12 +459,6 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
                               ctrl: _brandCtrl,
                               label: '品牌 *',
                               validator: (v) => (v == null || v.trim().isEmpty) ? '请输入品牌' : null,
-                            ),
-                            const SizedBox(height: 10),
-                            _m3Field(
-                              ctrl: _categoryCtrl,
-                              label: '分类 *',
-                              validator: (v) => (v == null || v.trim().isEmpty) ? '请输入分类' : null,
                             ),
                             const SizedBox(height: 10),
                             _m3Field(ctrl: _nickCtrl, label: '昵称'),

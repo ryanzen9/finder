@@ -68,7 +68,7 @@ class _ExplorePageState extends State<ExplorePage> {
             id: 'up-${u.id}',
             title: u.nickname.isNotEmpty ? u.nickname : u.name,
             brand: u.brand.isNotEmpty ? u.brand : 'Unknown',
-            model: u.category.isNotEmpty ? u.category : '未分类',
+            model: '-',
             room: '本地上传',
             updatedAt: u.createdAt,
             tags: [const ManualTag(id: 'upload', name: '上传')],
@@ -659,12 +659,7 @@ class _ManualDetailSheet extends StatelessWidget {
         Text(item.title, style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 8),
         Text('${item.brand} · ${item.model} · ${item.room}'),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: item.tags.map((t) => Chip(label: Text(t.name))).toList(),
-        ),
+
       ],
     );
   }

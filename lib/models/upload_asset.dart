@@ -9,7 +9,6 @@ class CachedUpload {
   final DateTime createdAt;
 
   final String brand;
-  final String category;
   final String description;
   final String nickname;
   final SyncStatus syncStatus;
@@ -23,7 +22,6 @@ class CachedUpload {
     required this.source,
     required this.createdAt,
     this.brand = '',
-    this.category = '',
     this.description = '',
     this.nickname = '',
     this.syncStatus = SyncStatus.pending,
@@ -38,7 +36,6 @@ class CachedUpload {
     UploadSource? source,
     DateTime? createdAt,
     String? brand,
-    String? category,
     String? description,
     String? nickname,
     SyncStatus? syncStatus,
@@ -52,7 +49,6 @@ class CachedUpload {
       source: source ?? this.source,
       createdAt: createdAt ?? this.createdAt,
       brand: brand ?? this.brand,
-      category: category ?? this.category,
       description: description ?? this.description,
       nickname: nickname ?? this.nickname,
       syncStatus: syncStatus ?? this.syncStatus,

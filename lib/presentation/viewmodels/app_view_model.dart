@@ -10,13 +10,11 @@ import 'package:flutter/foundation.dart';
 
 class UploadFormMeta {
   final String brand;
-  final String category;
   final String description;
   final String nickname;
 
   const UploadFormMeta({
     required this.brand,
-    required this.category,
     required this.description,
     required this.nickname,
   });
@@ -118,7 +116,6 @@ class AppViewModel extends ChangeNotifier {
     required String uploadId,
     required String title,
     required String brand,
-    required String category,
     required String description,
   }) async {
     final idx = _cachedUploads.indexWhere((e) => e.id == uploadId || 'up-${e.id}' == uploadId);
@@ -128,7 +125,6 @@ class AppViewModel extends ChangeNotifier {
     _cachedUploads[idx] = cur.copyWith(
       nickname: title,
       brand: brand,
-      category: category,
       description: description,
       isDraft: false,
     );
@@ -162,7 +158,6 @@ class AppViewModel extends ChangeNotifier {
         .map(
           (u) => u.copyWith(
             brand: meta.brand,
-            category: meta.category,
             nickname: meta.nickname,
             description: meta.description,
             isDraft: false,

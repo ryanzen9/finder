@@ -12,7 +12,7 @@ class LibraryPage extends StatefulWidget {
   final UserProfile? profile;
   final VoidCallback onAvatarTap;
   final Future<void> Function(String uploadId) onRemoveUpload;
-  final Future<void> Function(String uploadId, {required String title, required String brand, required String category, required String description}) onUpdateUpload;
+  final Future<void> Function(String uploadId, {required String title, required String brand, required String description}) onUpdateUpload;
   final List<ManualItem> extraManuals;
 
   const LibraryPage({
@@ -34,7 +34,6 @@ class _LibraryPageState extends State<LibraryPage> {
   final _searchCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
 
-  String? _selectedTag;
   bool _loading = true;
   List<ManualItem> _all = const [];
   double _scrollOffset = 0;
@@ -70,12 +69,11 @@ class _LibraryPageState extends State<LibraryPage> {
               id: 'up-${u.id}',
               title: u.nickname.isNotEmpty ? u.nickname : u.name,
               brand: u.brand.isNotEmpty ? u.brand : 'Unknown',
-              model: u.category.isNotEmpty ? u.category : '未分类',
+              model: '-',
               room: '本地上传',
               updatedAt: u.createdAt,
               tags: [
                 ManualTag(id: 'upload', name: '上传'),
-                if (u.category.isNotEmpty) ManualTag(id: 'cat', name: u.category),
               ],
               coverGradient: 'purple',
               underWarranty: false,
@@ -88,8 +86,7 @@ class _LibraryPageState extends State<LibraryPage> {
           e.title.toLowerCase().contains(q) ||
           e.brand.toLowerCase().contains(q) ||
           e.model.toLowerCase().contains(q);
-      final matchTag = _selectedTag == null || e.tags.any((t) => t.id == _selectedTag || t.name == _selectedTag);
-      return matchQ && matchTag;
+      return matchQ;
     }).toList();
   }
 
@@ -121,14 +118,6 @@ class _LibraryPageState extends State<LibraryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final tags = const [
-      ('tv', '影音'),
-      ('kitchen', '厨房'),
-      ('camera', '相机'),
-      ('car', '汽车'),
-      ('warranty', '保修中'),
-    ];
-
     final list = _filtered;
     final progress = (_scrollOffset / 100).clamp(0.0, 1.0);
     final logoOpacity = (1 - progress).clamp(0.0, 1.0);
@@ -146,28 +135,6 @@ class _LibraryPageState extends State<LibraryPage> {
                     slivers: [
                       const SliverToBoxAdapter(child: SizedBox(height: 118)),
 
-
-                      SliverToBoxAdapter(
-                        child: SizedBox(
-                          height: 52,
-                          child: ListView(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            children: tags.map((e) {
-                              final selected = _selectedTag == e.$1;
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: FilterChip(
-                                  label: Text(e.$2),
-                                  selected: selected,
-                                  onSelected: (v) => setState(() => _selectedTag = v ? e.$1 : null),
-                                  showCheckmark: false,
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      ),
                       if (list.isEmpty)
                         const SliverFillRemaining(child: Center(child: Text('暂无数据')))
                       else
@@ -213,11 +180,7 @@ class _LibraryPageState extends State<LibraryPage> {
                                                   const SizedBox(height: 4),
                                                   Text(item.room, style: Theme.of(context).textTheme.bodySmall),
                                                   const Spacer(),
-                                                  if (item.tags.isNotEmpty)
-                                                    Chip(
-                                                      label: Text(item.tags.first.name),
-                                                      visualDensity: VisualDensity.compact,
-                                                    ),
+
                                                 ],
                                               ),
                                             ),
@@ -241,8 +204,7 @@ class _LibraryPageState extends State<LibraryPage> {
                                                   item.id,
                                                   title: updated.$1,
                                                   brand: updated.$2,
-                                                  category: updated.$3,
-                                                  description: updated.$4,
+                                                  description: updated.$3,
                                                 );
                                               }
                                             }
@@ -342,13 +304,12 @@ class _LibraryPageState extends State<LibraryPage> {
     );
   }
 
-  Future<(String, String, String, String)?> _showEditDialog(BuildContext context, ManualItem item) async {
+  Future<(String, String, String)?> _showEditDialog(BuildContext context, ManualItem item) async {
     final titleCtrl = TextEditingController(text: item.title);
     final brandCtrl = TextEditingController(text: item.brand);
-    final categoryCtrl = TextEditingController(text: item.model);
     final descCtrl = TextEditingController();
 
-    final result = await showDialog<(String, String, String, String)>(
+    final result = await showDialog<(String, String, String)>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('更新说明书信息'),
@@ -360,8 +321,6 @@ class _LibraryPageState extends State<LibraryPage> {
               const SizedBox(height: 8),
               TextField(controller: brandCtrl, decoration: const InputDecoration(labelText: '品牌')),
               const SizedBox(height: 8),
-              TextField(controller: categoryCtrl, decoration: const InputDecoration(labelText: '分类')),
-              const SizedBox(height: 8),
               TextField(controller: descCtrl, decoration: const InputDecoration(labelText: '描述')),
             ],
           ),
@@ -369,7 +328,7 @@ class _LibraryPageState extends State<LibraryPage> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, (titleCtrl.text.trim(), brandCtrl.text.trim(), categoryCtrl.text.trim(), descCtrl.text.trim())),
+            onPressed: () => Navigator.pop(ctx, (titleCtrl.text.trim(), brandCtrl.text.trim(), descCtrl.text.trim())),
             child: const Text('保存'),
           ),
         ],
@@ -378,7 +337,6 @@ class _LibraryPageState extends State<LibraryPage> {
 
     titleCtrl.dispose();
     brandCtrl.dispose();
-    categoryCtrl.dispose();
     descCtrl.dispose();
     return result;
   }
@@ -414,8 +372,6 @@ class _ManualDetailSheet extends StatelessWidget {
         Text(item.title, style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 8),
         Text('${item.brand} · ${item.model} · ${item.room}'),
-        const SizedBox(height: 12),
-        Wrap(spacing: 8, runSpacing: 8, children: item.tags.map((t) => Chip(label: Text(t.name))).toList()),
         const SizedBox(height: 16),
         Card(
           elevation: 0,

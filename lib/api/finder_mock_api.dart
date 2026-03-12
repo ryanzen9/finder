@@ -9,7 +9,7 @@ class FinderMockApi implements IFinderApi {
   const FinderMockApi();
 
   @override
-  Future<List<ManualItem>> getLibrary({String? keyword, String? tag}) async {
+  Future<List<ManualItem>> getLibrary({String? keyword}) async {
     await Future<void>.delayed(const Duration(milliseconds: 280));
     var list = FinderMockData.manuals;
 
@@ -22,9 +22,6 @@ class FinderMockApi implements IFinderApi {
       }).toList();
     }
 
-    if (tag != null && tag.isNotEmpty) {
-      list = list.where((e) => e.tags.any((t) => t.id == tag)).toList();
-    }
 
     return list;
   }
