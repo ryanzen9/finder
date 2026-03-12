@@ -16,7 +16,7 @@ class MockApiService {
   Future<bool> publishHelpRequest({
     required String title,
     required String description,
-    String? imagePath,
+    List<String> imagePaths = const [],
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 800));
     return _random.nextInt(100) >= 5;

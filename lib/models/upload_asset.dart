@@ -8,6 +8,7 @@ class CachedUpload {
   final UploadSource source;
   final DateTime createdAt;
 
+  final String batchId;
   final String brand;
   final String description;
   final String nickname;
@@ -21,6 +22,7 @@ class CachedUpload {
     required this.path,
     required this.source,
     required this.createdAt,
+    this.batchId = '',
     this.brand = '',
     this.description = '',
     this.nickname = '',
@@ -35,6 +37,7 @@ class CachedUpload {
     String? path,
     UploadSource? source,
     DateTime? createdAt,
+    String? batchId,
     String? brand,
     String? description,
     String? nickname,
@@ -48,6 +51,7 @@ class CachedUpload {
       path: path ?? this.path,
       source: source ?? this.source,
       createdAt: createdAt ?? this.createdAt,
+      batchId: batchId ?? this.batchId,
       brand: brand ?? this.brand,
       description: description ?? this.description,
       nickname: nickname ?? this.nickname,

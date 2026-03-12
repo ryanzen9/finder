@@ -107,7 +107,12 @@ class AppViewModel extends ChangeNotifier {
   }
 
   Future<void> removeUploadById(String uploadId) async {
-    _cachedUploads.removeWhere((e) => e.id == uploadId || 'up-${e.id}' == uploadId);
+    if (uploadId.startsWith('upb-')) {
+      final batchId = uploadId.substring(4);
+      _cachedUploads.removeWhere((e) => e.batchId == batchId);
+    } else {
+      _cachedUploads.removeWhere((e) => e.id == uploadId || 'up-${e.id}' == uploadId);
+    }
     await _uploadCache.save(_cachedUploads);
     notifyListeners();
   }
@@ -118,16 +123,34 @@ class AppViewModel extends ChangeNotifier {
     required String brand,
     required String description,
   }) async {
-    final idx = _cachedUploads.indexWhere((e) => e.id == uploadId || 'up-${e.id}' == uploadId);
-    if (idx < 0) return;
+    if (uploadId.startsWith('upb-')) {
+      final batchId = uploadId.substring(4);
+      bool changed = false;
+      for (var i = 0; i < _cachedUploads.length; i++) {
+        final cur = _cachedUploads[i];
+        if (cur.batchId == batchId) {
+          _cachedUploads[i] = cur.copyWith(
+            nickname: title,
+            brand: brand,
+            description: description,
+            isDraft: false,
+          );
+          changed = true;
+        }
+      }
+      if (!changed) return;
+    } else {
+      final idx = _cachedUploads.indexWhere((e) => e.id == uploadId || 'up-${e.id}' == uploadId);
+      if (idx < 0) return;
+      final cur = _cachedUploads[idx];
+      _cachedUploads[idx] = cur.copyWith(
+        nickname: title,
+        brand: brand,
+        description: description,
+        isDraft: false,
+      );
+    }
 
-    final cur = _cachedUploads[idx];
-    _cachedUploads[idx] = cur.copyWith(
-      nickname: title,
-      brand: brand,
-      description: description,
-      isDraft: false,
-    );
     await _uploadCache.save(_cachedUploads);
     notifyListeners();
   }
@@ -154,9 +177,11 @@ class AppViewModel extends ChangeNotifier {
       _cachedUploads.removeWhere((e) => replacedDraftIds.contains(e.id));
     }
 
+    final batchId = DateTime.now().millisecondsSinceEpoch.toString();
     final prepared = uploads
         .map(
           (u) => u.copyWith(
+            batchId: batchId,
             brand: meta.brand,
             nickname: meta.nickname,
             description: meta.description,
