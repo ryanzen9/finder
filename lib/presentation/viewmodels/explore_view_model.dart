@@ -16,12 +16,12 @@ class ExploreViewModel {
   Future<bool> publishHelpRequest({
     required String title,
     required String description,
-    String? imagePath,
+    List<String> imagePaths = const [],
   }) {
     return _api.publishHelpRequest(
       title: title,
       description: description,
-      imagePath: imagePath,
+      imagePaths: imagePaths,
     );
   }
 }

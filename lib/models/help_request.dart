@@ -6,6 +6,7 @@ class HelpRequest {
   final String timeText;
   final String description;
   final String? imagePath;
+  final List<String> imagePaths;
 
   const HelpRequest({
     required this.id,
@@ -15,5 +16,6 @@ class HelpRequest {
     required this.timeText,
     this.description = '',
     this.imagePath,
+    this.imagePaths = const [],
   });
 }

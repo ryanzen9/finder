@@ -135,7 +135,7 @@ class _ExplorePageState extends State<ExplorePage> {
     final ok = await _vm.publishHelpRequest(
       title: result.title,
       description: result.description,
-      imagePath: result.imagePath,
+      imagePaths: result.imagePaths,
     );
 
     if (!mounted) return;
@@ -155,7 +155,8 @@ class _ExplorePageState extends State<ExplorePage> {
         location: '我的位置',
         timeText: '刚刚',
         description: result.description,
-        imagePath: result.imagePath,
+        imagePath: result.imagePaths.isNotEmpty ? result.imagePaths.first : null,
+        imagePaths: result.imagePaths,
       ),
     );
     _refreshExplore();
@@ -444,6 +445,7 @@ class _TriStateRespondButton extends StatefulWidget {
   final Future<bool> Function() onRespond;
   final bool closeOnSuccess;
   final bool fullWidth;
+  final String idleText;
 
   const _TriStateRespondButton({
     super.key,
@@ -451,6 +453,7 @@ class _TriStateRespondButton extends StatefulWidget {
     required this.onRespond,
     this.closeOnSuccess = false,
     this.fullWidth = true,
+    this.idleText = '响应',
   });
 
   @override
@@ -527,9 +530,9 @@ class _TriStateRespondButtonState extends State<_TriStateRespondButton>
                       size: 18,
                       color: Colors.grey,
                     )
-                  : const Text(
-                      '响应',
-                      key: ValueKey('idle'),
+                  : Text(
+                      widget.idleText,
+                      key: const ValueKey('idle'),
                     ),
         ),
       ),
@@ -550,40 +553,42 @@ class _HelpRequestDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final images = request.imagePaths.isNotEmpty
+        ? request.imagePaths
+        : (request.imagePath != null ? [request.imagePath!] : const <String>[]);
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       children: [
-        Container(
-          height: 170,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.secondaryContainer,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: request.imagePath == null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.photo_outlined,
-                        color: Theme.of(context).colorScheme.onSecondaryContainer,
-                        size: 32,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '暂无图片',
-                        style: TextStyle(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSecondaryContainer,
-                        ),
-                      ),
-                    ],
+        if (images.isEmpty)
+          Container(
+            height: 170,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.photo_outlined,
+                    color: Theme.of(context).colorScheme.onSecondaryContainer,
+                    size: 32,
                   ),
-                )
-              : Image.file(File(request.imagePath!), fit: BoxFit.cover),
-        ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '暂无图片',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          _ImageCarouselWithThumbs(paths: images, height: 170, radius: 20),
         const SizedBox(height: 16),
         Text(request.title, style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 8),
@@ -598,6 +603,103 @@ class _HelpRequestDetailSheet extends StatelessWidget {
           initiallyDone: initiallyDone,
           onRespond: onRespond,
         ),
+      ],
+    );
+  }
+}
+
+class _ImageCarouselWithThumbs extends StatefulWidget {
+  final List<String> paths;
+  final double height;
+  final double radius;
+
+  const _ImageCarouselWithThumbs({
+    required this.paths,
+    this.height = 180,
+    this.radius = 16,
+  });
+
+  @override
+  State<_ImageCarouselWithThumbs> createState() => _ImageCarouselWithThumbsState();
+}
+
+class _ImageCarouselWithThumbsState extends State<_ImageCarouselWithThumbs> {
+  late final PageController _pageCtrl;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageCtrl = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          height: widget.height,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(widget.radius),
+            child: PageView.builder(
+              controller: _pageCtrl,
+              itemCount: widget.paths.length,
+              onPageChanged: (i) => setState(() => _index = i),
+              itemBuilder: (_, i) => Image.file(
+                File(widget.paths[i]),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.broken_image_outlined),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (widget.paths.length > 1) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 52,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: widget.paths.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (_, i) {
+                final selected = i == _index;
+                return GestureDetector(
+                  onTap: () => _pageCtrl.animateToPage(
+                    i,
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                  ),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: 52,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: selected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Image.file(
+                      File(widget.paths[i]),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -839,6 +941,7 @@ class _ManualDetailSheet extends StatelessWidget {
         if (onRespond != null) ...[
           const SizedBox(height: 20),
           _TriStateRespondButton(
+            idleText: '添加',
             onRespond: () async {
               await onRespond!.call();
               return true;
@@ -854,12 +957,12 @@ class _ManualDetailSheet extends StatelessWidget {
 class _PublishDraftResult {
   final String title;
   final String description;
-  final String? imagePath;
+  final List<String> imagePaths;
 
   const _PublishDraftResult({
     required this.title,
     required this.description,
-    required this.imagePath,
+    required this.imagePaths,
   });
 }
 
@@ -876,7 +979,7 @@ class _PublishHelpSheetState extends State<_PublishHelpSheet> {
   final _descCtrl = TextEditingController();
   final _picker = ImagePicker();
 
-  String? _imagePath;
+  final List<String> _imagePaths = [];
 
   @override
   void dispose() {
@@ -886,9 +989,13 @@ class _PublishHelpSheetState extends State<_PublishHelpSheet> {
   }
 
   Future<void> _pickImage() async {
-    final file = await _picker.pickImage(source: ImageSource.gallery);
-    if (file == null || !mounted) return;
-    setState(() => _imagePath = file.path);
+    final files = await _picker.pickMultiImage();
+    if (files.isEmpty || !mounted) return;
+    setState(() {
+      _imagePaths
+        ..clear()
+        ..addAll(files.map((e) => e.path));
+    });
   }
 
   @override
@@ -933,22 +1040,28 @@ class _PublishHelpSheetState extends State<_PublishHelpSheet> {
                     color: Theme.of(context).colorScheme.surfaceContainerHigh,
                   ),
                   alignment: Alignment.center,
-                  child: _imagePath == null
+                  child: _imagePaths.isEmpty
                       ? const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.image_outlined),
                             SizedBox(height: 6),
-                            Text('点击添加图片'),
+                            Text('点击添加图片（支持多图）'),
                           ],
                         )
-                      : ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Image.file(
-                            File(_imagePath!),
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: 128,
+                      : ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.all(6),
+                          itemCount: _imagePaths.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (_, i) => ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.file(
+                              File(_imagePaths[i]),
+                              width: 110,
+                              height: 116,
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
                 ),
@@ -973,7 +1086,7 @@ class _PublishHelpSheetState extends State<_PublishHelpSheet> {
                           _PublishDraftResult(
                             title: _titleCtrl.text.trim(),
                             description: _descCtrl.text.trim(),
-                            imagePath: _imagePath,
+                            imagePaths: List<String>.from(_imagePaths),
                           ),
                         );
                       },
