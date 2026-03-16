@@ -106,7 +106,10 @@ class _ExplorePageState extends State<ExplorePage> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? '已响应：${picked.title}' : '响应失败，请稍后重试')),
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(ok ? '已响应：${picked.title}' : '响应失败，请稍后重试'),
+      ),
     );
     return ok;
   }
@@ -118,7 +121,10 @@ class _ExplorePageState extends State<ExplorePage> {
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? '已加入说明书架：${item.title}' : '添加失败，请稍后重试')),
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(ok ? '已加入说明书架：${item.title}' : '添加失败，请稍后重试'),
+      ),
     );
   }
 
@@ -141,7 +147,10 @@ class _ExplorePageState extends State<ExplorePage> {
     if (!mounted) return;
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('发布失败，请稍后重试')),
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: const Text('发布失败，请稍后重试'),
+        ),
       );
       return;
     }
@@ -162,7 +171,10 @@ class _ExplorePageState extends State<ExplorePage> {
     _refreshExplore();
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('发布成功')),
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: const Text('发布成功'),
+      ),
     );
   }
 
@@ -237,9 +249,11 @@ class _ExplorePageState extends State<ExplorePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: _openPublishSheet,
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('发布'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       body: SafeArea(
         child: ListView(
@@ -247,12 +261,12 @@ class _ExplorePageState extends State<ExplorePage> {
           children: [
             Text('探索', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 4),
-            Text('发现外部资源与社区互助',
+            Text('搜索社区分享的说明书，或发布求助',
                 style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 12),
             SearchBar(
               controller: _ctrl,
-              hintText: '众包搜索：品牌/型号',
+              hintText: '搜索品牌或型号',
               onTap: () => _openCommunitySearchPage(_ctrl.text),
               leading: const Icon(Icons.search),
             ),
@@ -260,7 +274,7 @@ class _ExplorePageState extends State<ExplorePage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('求助悬赏', style: Theme.of(context).textTheme.titleMedium),
+                Text('寻物帮助', style: Theme.of(context).textTheme.titleMedium),
                 FutureBuilder<List<HelpRequest>>(
                   future: _helpRequestsFuture,
                   builder: (context, snap) {
@@ -277,18 +291,34 @@ class _ExplorePageState extends State<ExplorePage> {
             FutureBuilder<List<HelpRequest>>(
               future: _helpRequestsFuture,
               builder: (context, snap) {
-                final list = snap.data ?? [];
-                if (snap.connectionState != ConnectionState.done) {
+                if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
+                if (snap.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.cloud_off_outlined, size: 40, color: Colors.grey),
+                        const SizedBox(height: 8),
+                        const Text('加载失败', style: TextStyle(color: Colors.grey)),
+                        TextButton(
+                          onPressed: () => setState(() => _helpRequestsFuture = _loadHelpRequests()),
+                          child: const Text('重试'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                final list = snap.data ?? [];
                 return Column(
                   children: list.take(3).map((e) {
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
                       onTap: () => _openHelpDetail(e),
-                      leading: CircleAvatar(child: Text(e.author[0])),
-                      title: Text(e.title),
-                      subtitle: Text('${e.timeText} · ${e.location}'),
+                      leading: CircleAvatar(child: Text(e.author.isNotEmpty ? e.author[0] : '?')),
+                      title: Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text('${e.timeText} · ${e.location}', maxLines: 1, overflow: TextOverflow.ellipsis),
                       trailing: _RespondActionButton(
                         requestId: e.id,
                         initiallyDone: _respondedRequestIds.contains(e.id),
@@ -303,7 +333,7 @@ class _ExplorePageState extends State<ExplorePage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('社区结果', style: Theme.of(context).textTheme.titleMedium),
+                Text('社区分享', style: Theme.of(context).textTheme.titleMedium),
                 FutureBuilder<List<ManualItem>>(
                   future: _communityFuture,
                   builder: (context, snap) {
@@ -321,8 +351,24 @@ class _ExplorePageState extends State<ExplorePage> {
             FutureBuilder<List<ManualItem>>(
               future: _communityFuture,
               builder: (context, snap) {
-                if (snap.connectionState != ConnectionState.done) {
+                if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
+                }
+                if (snap.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.cloud_off_outlined, size: 40, color: Colors.grey),
+                        const SizedBox(height: 8),
+                        const Text('加载失败', style: TextStyle(color: Colors.grey)),
+                        TextButton(
+                          onPressed: () => setState(() => _communityFuture = widget.api.searchCommunity(_ctrl.text)),
+                          child: const Text('重试'),
+                        ),
+                      ],
+                    ),
+                  );
                 }
                 final list = snap.data ?? [];
                 return Column(
@@ -331,8 +377,8 @@ class _ExplorePageState extends State<ExplorePage> {
                       elevation: 0,
                       child: ListTile(
                         leading: const Icon(Icons.description_outlined),
-                        title: Text(e.title),
-                        subtitle: Text('${e.brand} ${e.model}'),
+                        title: Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        subtitle: Text('${e.brand} ${e.model}', maxLines: 1, overflow: TextOverflow.ellipsis),
                         onTap: () => showModalBottomSheet(
                           context: context,
                           isScrollControlled: true,
@@ -374,7 +420,7 @@ class HelpListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('求助悬赏')),
+      appBar: AppBar(title: const Text('寻物帮助')),
       body: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemBuilder: (_, i) {
@@ -396,9 +442,9 @@ class HelpListPage extends StatelessWidget {
                   ),
                 ),
               ),
-              leading: CircleAvatar(child: Text(e.author[0])),
-              title: Text(e.title),
-              subtitle: Text('${e.timeText} · ${e.location}'),
+              leading: CircleAvatar(child: Text(e.author.isNotEmpty ? e.author[0] : '?')),
+              title: Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text('${e.timeText} · ${e.location}', maxLines: 1, overflow: TextOverflow.ellipsis),
               trailing: _RespondActionButton(
                 requestId: e.id,
                 initiallyDone: respondedRequestIds.contains(e.id),
@@ -524,11 +570,11 @@ class _TriStateRespondButtonState extends State<_TriStateRespondButton>
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : _done
-                  ? const Icon(
+                  ? Icon(
                       Icons.check,
-                      key: ValueKey('success'),
+                      key: const ValueKey('success'),
                       size: 18,
-                      color: Colors.grey,
+                      color: Theme.of(context).colorScheme.primary,
                     )
                   : Text(
                       widget.idleText,
@@ -747,7 +793,7 @@ class _CommunitySearchPageState extends State<CommunitySearchPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('社区结果')),
+      appBar: AppBar(title: const Text('社区分享')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
@@ -762,8 +808,24 @@ class _CommunitySearchPageState extends State<CommunitySearchPage> {
           FutureBuilder<List<ManualItem>>(
             future: _future,
             builder: (context, snap) {
-              if (snap.connectionState != ConnectionState.done) {
+              if (snap.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
+              }
+              if (snap.hasError) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.cloud_off_outlined, size: 40, color: Colors.grey),
+                      const SizedBox(height: 8),
+                      const Text('加载失败', style: TextStyle(color: Colors.grey)),
+                      TextButton(
+                        onPressed: _search,
+                        child: const Text('重试'),
+                      ),
+                    ],
+                  ),
+                );
               }
               final list = snap.data ?? const <ManualItem>[];
               if (list.isEmpty) {
@@ -778,8 +840,8 @@ class _CommunitySearchPageState extends State<CommunitySearchPage> {
                     elevation: 0,
                     child: ListTile(
                       leading: const Icon(Icons.description_outlined),
-                      title: Text(e.title),
-                      subtitle: Text('${e.brand} ${e.model}'),
+                      title: Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text('${e.brand} ${e.model}', maxLines: 1, overflow: TextOverflow.ellipsis),
                       onTap: () => showModalBottomSheet(
                         context: context,
                         isScrollControlled: true,
@@ -825,8 +887,8 @@ class CommunityFeedPage extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
           childAspectRatio: 0.72,
         ),
         itemCount: items.length,
@@ -869,7 +931,7 @@ class CommunityFeedPage extends StatelessWidget {
                       width: double.infinity,
                       child: FilledButton.tonal(
                         onPressed: () => onAdd(item),
-                        child: const Text('Add'),
+                        child: const Text('添加'),
                       ),
                     ),
                   ),
@@ -897,8 +959,8 @@ class _SelectManualSheet extends StatelessWidget {
           return ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.menu_book_outlined),
-            title: Text(item.title),
-            subtitle: Text('${item.brand} · ${item.model}'),
+            title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text('${item.brand} · ${item.model}', maxLines: 1, overflow: TextOverflow.ellipsis),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.pop(context, item),
           );
@@ -1014,7 +1076,7 @@ class _PublishHelpSheetState extends State<_PublishHelpSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('发布寻物', style: Theme.of(context).textTheme.titleLarge),
+              Text('发布求助', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 14),
               _m3Field(
                 ctrl: _titleCtrl,
@@ -1046,7 +1108,7 @@ class _PublishHelpSheetState extends State<_PublishHelpSheet> {
                           children: [
                             Icon(Icons.image_outlined),
                             SizedBox(height: 6),
-                            Text('点击添加图片（支持多图）'),
+                            Text('点击添加照片'),
                           ],
                         )
                       : ListView.separated(

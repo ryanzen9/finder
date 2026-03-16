@@ -29,7 +29,10 @@ class _MainScreenState extends State<MainScreen> {
     final vm = context.read<AppViewModel>();
     if (vm.profile != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已登录：${vm.profile!.nickname}')),
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('已登录：${vm.profile!.nickname}'),
+        ),
       );
       return;
     }
@@ -45,13 +48,13 @@ class _MainScreenState extends State<MainScreen> {
             ListTile(
               leading: const Icon(Icons.g_mobiledata_rounded, size: 32),
               title: const Text('使用 Google 登录'),
-              subtitle: const Text('官方 Google SDK'),
+              subtitle: const Text('安全便捷，一键登录'),
               onTap: () => Navigator.pop(ctx, 'google'),
             ),
             ListTile(
               leading: const Icon(Icons.apple),
               title: const Text('使用 Apple 登录'),
-              subtitle: const Text('官方 Apple 登录'),
+              subtitle: const Text('安全隐私，保护个人信息'),
               onTap: () => Navigator.pop(ctx, 'apple'),
             ),
             const SizedBox(height: 8),
@@ -66,12 +69,18 @@ class _MainScreenState extends State<MainScreen> {
       final profile = await vm.loginByProvider(action);
       if (!mounted || profile == null) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('登录成功，欢迎 ${profile.nickname}')),
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('登录成功，欢迎 ${profile.nickname}'),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('登录失败：$e')),
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('登录失败：$e'),
+        ),
       );
     }
   }
@@ -183,10 +192,14 @@ class _MainScreenState extends State<MainScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: commit.successCount == commit.totalCount ? Colors.green.shade600 : Colors.orange.shade700,
+        backgroundColor: commit.successCount == commit.totalCount
+            ? Theme.of(context).colorScheme.primary
+            : Theme.of(context).colorScheme.error,
         content: Row(
           children: [
-            Icon(commit.successCount == commit.totalCount ? Icons.check_circle_outline : Icons.error_outline, color: Colors.white),
+            Icon(commit.successCount == commit.totalCount
+                ? Icons.check_circle_outline
+                : Icons.error_outline, color: Theme.of(context).colorScheme.onPrimary),
             const SizedBox(width: 8),
             Text(commit.successCount == commit.totalCount
                 ? '上传成功（${commit.successCount}）并加入本地书架'
@@ -433,7 +446,7 @@ class _UploadFormSheetState extends State<_UploadFormSheet> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('上传资料', style: Theme.of(context).textTheme.headlineSmall),
+                          Text('上传说明书', style: Theme.of(context).textTheme.headlineSmall),
                           IconButton(onPressed: _requestClose, icon: const Icon(Icons.close)),
                         ],
                       ),
